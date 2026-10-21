@@ -1,5 +1,24 @@
 [
   {
+    "id": "todo-gym-2026-10-22",
+    "title": "🏃 07:30 起床 · 健身房晨练打卡",
+    "date": "2026-10-22",
+    "time": "07:30",
+    "priority": "medium",
+    "category": "健康",
+    "notes": "每日晨练习惯：07:30 起床前往健身房打卡，唤醒身体状态！",
+    "content": "【每日晨间健康习惯 · 一周7天】\n⏰ 07:30 准时起床洗漱。\n🏃 前往健身房进行力量/有氧训练 + 充分动态拉伸。\n💧 训练贴士：晨练前适量温水补水，充分热身防止拉伤。\n\n每日练完后点击左侧大圆圈核销打卡！",
+    "links": [],
+    "images": [
+      "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80"
+    ],
+    "source": "agent",
+    "completed": false,
+    "completedAt": null,
+    "createdAt": "2026-10-21T16:58:23.171Z",
+    "updatedAt": "2026-10-21T16:58:23.171Z"
+  },
+  {
     "id": "todo-gym-2026-10-29",
     "title": "🏃 07:30 起床 · 健身房晨练打卡",
     "date": "2026-10-29",
