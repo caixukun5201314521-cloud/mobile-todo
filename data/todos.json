@@ -6,8 +6,8 @@
     "time": "18:30",
     "priority": "medium",
     "category": "健康",
-    "notes": "球类运动协调性与心肺有氧打卡！",
-    "content": "【有氧对抗日】\n🏓 挥拍有氧，快乐燃脂，完成本周有氧目标！",
+    "notes": "隔日球类有氧打卡！",
+    "content": "【周四有氧日】\n🏓 匹克球/网球全身有氧。",
     "links": [],
     "images": [
       "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=600&auto=format&fit=crop&q=80"
@@ -15,8 +15,8 @@
     "source": "agent",
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T17:00:15.335Z",
-    "updatedAt": "2026-10-21T17:00:15.335Z"
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
   },
   {
     "id": "todo-sport-2026-10-28-gym",
@@ -25,8 +25,8 @@
     "time": "07:30",
     "priority": "medium",
     "category": "健康",
-    "notes": "07:30 准时打卡，注重动作标准与发力感！",
-    "content": "【中期力量强化】\n⏰ 07:30 健身房晨间抗阻训练。",
+    "notes": "07:30 健身房力量打卡！",
+    "content": "【周三晨练力量】\n⏰ 07:30 力量抗阻训练。",
     "links": [],
     "images": [
       "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80"
@@ -34,8 +34,8 @@
     "source": "agent",
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T17:00:15.335Z",
-    "updatedAt": "2026-10-21T17:00:15.335Z"
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
   },
   {
     "id": "todo-sport-2026-10-27-tennis",
@@ -44,8 +44,8 @@
     "time": "18:30",
     "priority": "medium",
     "category": "健康",
-    "notes": "傍晚打球暴汗，舒缓白天久坐压力！",
-    "content": "【隔日趣味有氧】\n🏓 匹克球/网球对抗有氧训练，步伐灵敏度练习。",
+    "notes": "隔天趣味有氧，傍晚打球暴汗！",
+    "content": "【傍晚有氧运动】\n🎾 匹克球/网球对抗训练。",
     "links": [],
     "images": [
       "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=600&auto=format&fit=crop&q=80"
@@ -53,18 +53,18 @@
     "source": "agent",
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T17:00:15.335Z",
-    "updatedAt": "2026-10-21T17:00:15.335Z"
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
   },
   {
     "id": "todo-sport-2026-10-26-gym",
-    "title": "🏋️‍♂️ 07:30 健身房晨练 · 唤醒周一状态",
+    "title": "🏋️‍♂️ 07:30 健身房晨练 · 唤醒周一",
     "date": "2026-10-26",
     "time": "07:30",
     "priority": "medium",
     "category": "健康",
-    "notes": "新的一周晨间力量训练，激活饱满精神！",
-    "content": "【周一晨间开练】\n⏰ 07:30 晨练力量打卡，开启高效自律新一周！",
+    "notes": "周一晨间力量训练，激活饱满精神状态！",
+    "content": "【新周力量开启】\n⏰ 07:30 晨练力量打卡！",
     "links": [],
     "images": [
       "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80"
@@ -72,18 +72,18 @@
     "source": "agent",
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T17:00:15.335Z",
-    "updatedAt": "2026-10-21T17:00:15.335Z"
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
   },
   {
     "id": "todo-sport-2026-10-25-tennis",
-    "title": "🏓 匹克球 / 网球周末有氧拉伸",
+    "title": "🏓 周日匹克球 / 网球有氧",
     "date": "2026-10-25",
     "time": "16:30",
     "priority": "medium",
     "category": "健康",
-    "notes": "周末下午打球暴汗，放松身心缓解疲劳！",
-    "content": "【周末有氧放松日】\n🎾 安排：周末下午约球友打匹克球或网球双打/单打。\n🧘 练后重点：充分进行腿部与手臂拉伸，促进乳酸代谢。",
+    "notes": "周日下午球类运动，充分释放压力！",
+    "content": "【周日有氧与拉伸】\n🏓 匹克球/网球对抗有氧训练，打完充分拉伸恢复。",
     "links": [],
     "images": [
       "https://images.unsplash.com/photo-1622279457486-62dcc4a431d6?w=600&auto=format&fit=crop&q=80"
@@ -91,37 +91,18 @@
     "source": "agent",
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T17:00:15.335Z",
-    "updatedAt": "2026-10-21T17:00:15.335Z"
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
   },
   {
-    "id": "todo-sport-2026-10-24-gym",
-    "title": "🏋️‍♂️ 07:30 健身房晨练 · 力量与核心",
+    "id": "todo-sport-2026-10-24-tennis",
+    "title": "🎾 周六网球 / 匹克球有氧",
     "date": "2026-10-24",
-    "time": "07:30",
+    "time": "16:30",
     "priority": "medium",
     "category": "健康",
-    "notes": "07:30 起床前往健身房进行抗阻力量训练，唤醒充沛活力！",
-    "content": "【力量训练日】\n⏰ 07:30 准时起床前往健身房。\n🏋️‍♂️ 重点部位：大肌群力量训练（深蹲/卧推/背部）+ 核心收紧。\n💧 训练贴士：训练后补充优质蛋白质与碳水复合餐。",
-    "links": [],
-    "images": [
-      "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80"
-    ],
-    "source": "agent",
-    "completed": false,
-    "completedAt": null,
-    "createdAt": "2026-10-21T17:00:15.335Z",
-    "updatedAt": "2026-10-21T17:00:15.335Z"
-  },
-  {
-    "id": "todo-sport-2026-10-23-tennis",
-    "title": "🎾 匹克球 / 网球有氧运动",
-    "date": "2026-10-23",
-    "time": "18:30",
-    "priority": "medium",
-    "category": "健康",
-    "notes": "下午/晚间抽时间打匹克球或网球，通过挥拍运动进行全身高效有氧！",
-    "content": "【隔日有氧活动 · 匹克球 / 网球】\n🏓 安排：下午或傍晚抽时间打球 1~1.5 小时。\n🔥 目标：提升心肺耐力、灵活性与燃脂，兼顾运动趣味性！\n💧 装备准备：球拍、运动鞋、吸汗毛巾与运动饮料。",
+    "notes": "周末下午打球暴汗，挥拍有氧！",
+    "content": "【周末球类运动日】\n🎾 周六下午/傍晚约球打匹克球或网球，全身协调有氧！",
     "links": [],
     "images": [
       "https://images.unsplash.com/photo-1554068865-24cecd4e34b8?w=600&auto=format&fit=crop&q=80"
@@ -129,8 +110,44 @@
     "source": "agent",
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T17:00:15.335Z",
-    "updatedAt": "2026-10-21T17:00:15.335Z"
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
+  },
+  {
+    "id": "todo-sport-2026-10-23-gym",
+    "title": "🏋️‍♂️ 07:30 健身房晨练（周五上午）",
+    "date": "2026-10-23",
+    "time": "07:30",
+    "priority": "medium",
+    "category": "健康",
+    "notes": "避开周五晚间上课，安排在上午晨练力量！",
+    "content": "【周五上午晨练】\n⏰ 07:30 起床前往健身房。\n💡 备注：晚上 21:00 有课，因此运动放在上午完成，晚上专注上课！",
+    "links": [],
+    "images": [
+      "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80"
+    ],
+    "source": "agent",
+    "completed": false,
+    "completedAt": null,
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
+  },
+  {
+    "id": "todo-assignment-2026-10-22-1792602254888",
+    "title": "📝 6风险与收益入门-2e（40题·今晚23:55截止）",
+    "date": "2026-10-22",
+    "time": "10:30",
+    "priority": "high",
+    "category": "学习",
+    "notes": "题量: 40 | 满分: 100 | 作答时间: 10-16 12:11 至 10-22 23:55（今晚截止！）",
+    "content": "【线上作业截止提醒】\n📚 作业名称：6风险与收益入门-2e\n📊 题量：40 题\n💯 满分：100 分\n⏰ 作答时间范围：10月16日 12:11 至 10月22日 23:55\n\n⚠️ 紧急提醒：\n今晚 23:55 系统自动关闭提交！10点抢完实训课后抓紧时间完成，避免临近深夜服务器卡顿或网络故障导致无法提交。",
+    "links": [],
+    "images": [],
+    "source": "agent",
+    "completed": false,
+    "completedAt": null,
+    "createdAt": "2026-10-21T17:04:14.888Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
   },
   {
     "id": "todo-gym-2026-10-22",
@@ -139,17 +156,16 @@
     "time": "07:30",
     "priority": "medium",
     "category": "健康",
-    "notes": "每日晨练习惯：07:30 起床前往健身房打卡，唤醒身体状态！",
-    "content": "【每日晨间健康习惯 · 一周7天】\n⏰ 07:30 准时起床洗漱。\n🏃 前往健身房进行力量/有氧训练 + 充分动态拉伸。\n💧 训练贴士：晨练前适量温水补水，充分热身防止拉伤。\n\n每日练完后点击左侧大圆圈核销打卡！",
-    "links": [],
+    "notes": "早晨 07:30 准时前往健身房打卡，唤醒身体状态！",
+    "content": "【早晨健身打卡】\n⏰ 07:30 起床洗漱前往健身房，晨练开启活力一天！",
     "images": [
       "https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80"
     ],
     "source": "agent",
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T16:58:23.171Z",
-    "updatedAt": "2026-10-21T16:58:23.171Z"
+    "createdAt": "2026-10-21T17:04:14.885Z",
+    "updatedAt": "2026-10-21T17:04:14.888Z"
   },
   {
     "id": "todo-1792601453325-438",
