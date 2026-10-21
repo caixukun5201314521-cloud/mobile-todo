@@ -7,16 +7,22 @@ import QRCode from 'qrcode';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_FILE = path.join(__dirname, 'data', 'todos.json');
+
+// Allow configurable data path for cloud container volumes
+const DATA_DIR = process.env.DATA_PATH || path.join(__dirname, 'data');
+const DATA_FILE = path.extname(DATA_DIR) ? DATA_DIR : path.join(DATA_DIR, 'todos.json');
 const PORT = process.env.PORT || 3000;
+const API_KEY = process.env.API_KEY || ''; // Optional secret token
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ensure data file exists
-if (!fs.existsSync(DATA_FILE)) {
+// Ensure data directory and file exist
+if (!fs.existsSync(path.dirname(DATA_FILE))) {
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+}
+if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, '[]', 'utf-8');
 }
 
@@ -48,17 +54,21 @@ function getFileHash() {
 }
 lastKnownFileHash = getFileHash();
 
-fs.watch(DATA_FILE, () => {
-  clearTimeout(fileDebounceTimer);
-  fileDebounceTimer = setTimeout(() => {
-    const currentHash = getFileHash();
-    if (currentHash !== lastKnownFileHash) {
-      lastKnownFileHash = currentHash;
-      const todos = readTodos();
-      broadcastEvent('sync', { action: 'file_changed', todos });
-    }
-  }, 100);
-});
+try {
+  fs.watch(DATA_FILE, () => {
+    clearTimeout(fileDebounceTimer);
+    fileDebounceTimer = setTimeout(() => {
+      const currentHash = getFileHash();
+      if (currentHash !== lastKnownFileHash) {
+        lastKnownFileHash = currentHash;
+        const todos = readTodos();
+        broadcastEvent('sync', { action: 'file_changed', todos });
+      }
+    }, 100);
+  });
+} catch (err) {
+  console.warn('文件热监听启动警告:', err.message);
+}
 
 function readTodos() {
   try {
@@ -94,6 +104,14 @@ function getLocalIpAddresses() {
   return addresses;
 }
 
+// Optional Auth Middleware for write API
+function requireAuth(req, res, next) {
+  if (!API_KEY) return next();
+  const providedKey = req.headers['x-api-key'] || req.query.key;
+  if (providedKey === API_KEY) return next();
+  return res.status(401).json({ error: '未经授权：缺少或无效的 API 密钥' });
+}
+
 // SSE endpoint
 app.get('/api/events', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -101,11 +119,9 @@ app.get('/api/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders?.();
 
-  // Send initial connection greeting
   res.write(`event: connected\ndata: ${JSON.stringify({ time: new Date().toISOString() })}\n\n`);
   sseClients.add(res);
 
-  // Keep-alive ping every 25s
   const pingInterval = setInterval(() => {
     res.write(': ping\n\n');
   }, 25000);
@@ -123,7 +139,7 @@ app.get('/api/todos', (req, res) => {
 });
 
 // API: Add todo
-app.post('/api/todos', (req, res) => {
+app.post('/api/todos', requireAuth, (req, res) => {
   const { title, date, time, priority, category, notes } = req.body;
   if (!title || !title.trim()) {
     return res.status(400).json({ error: '标题不能为空' });
@@ -153,8 +169,8 @@ app.post('/api/todos', (req, res) => {
   res.status(201).json({ success: true, todo: newTodo });
 });
 
-// API: Update todo (complete, edit title, etc.)
-app.patch('/api/todos/:id', (req, res) => {
+// API: Update todo
+app.patch('/api/todos/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   const todos = readTodos();
@@ -167,7 +183,6 @@ app.patch('/api/todos/:id', (req, res) => {
   const existing = todos[index];
   const now = new Date().toISOString();
 
-  // Handle completed toggle
   if (typeof updates.completed === 'boolean') {
     existing.completed = updates.completed;
     existing.completedAt = updates.completed ? now : null;
@@ -187,7 +202,7 @@ app.patch('/api/todos/:id', (req, res) => {
 });
 
 // API: Delete todo
-app.delete('/api/todos/:id', (req, res) => {
+app.delete('/api/todos/:id', requireAuth, (req, res) => {
   const { id } = req.params;
   const todos = readTodos();
   const index = todos.findIndex((t) => t.id === id);
@@ -206,8 +221,9 @@ app.delete('/api/todos/:id', (req, res) => {
 // API: Network and QR code info
 app.get('/api/network', async (req, res) => {
   const ips = getLocalIpAddresses();
-  const primaryIp = ips[0] || 'localhost';
-  const url = `http://${primaryIp}:${PORT}`;
+  const host = req.get('host') || `${ips[0] || 'localhost'}:${PORT}`;
+  const protocol = req.protocol || 'http';
+  const url = `${protocol}://${host}`;
   let qrDataUrl = '';
 
   try {
@@ -232,23 +248,21 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 
   console.log('='.repeat(55));
   console.log(`🚀 待办日历看板服务已启动！`);
-  console.log(`💻 电脑访问: http://localhost:${PORT}`);
-  console.log(`📱 手机访问: ${mobileUrl}`);
-  console.log(`⚡ 监听地址: 0.0.0.0:${PORT}`);
+  console.log(`💻 本地访问: http://localhost:${PORT}`);
+  console.log(`📱 局域网访问: ${mobileUrl}`);
+  console.log(`⚡ 监听端口: ${PORT}`);
+  if (API_KEY) console.log(`🔒 API 鉴权已开启`);
   console.log('='.repeat(55));
 
   try {
     const terminalQR = await QRCode.toString(mobileUrl, { type: 'terminal', small: true });
-    console.log('\n📲 手机扫描下方二维码直接访问：');
+    console.log('\n📲 扫码访问：');
     console.log(terminalQR);
   } catch {
     // ignore
   }
 });
 
-// Graceful exit
 process.on('SIGINT', () => {
-  server.close(() => {
-    process.exit(0);
-  });
+  server.close(() => process.exit(0));
 });
