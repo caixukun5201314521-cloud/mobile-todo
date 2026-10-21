@@ -22,13 +22,13 @@
             <h1>代办日历</h1>
             <div class="sync-status" id="syncStatus">
               <span class="status-dot online"></span>
-              <span class="status-label">Agent 实时在线</span>
+              <span class="status-label">实时在线</span>
             </div>
           </div>
         </div>
 
         <div class="header-actions">
-          <button class="icon-btn" id="qrBtn" title="手机扫码 / 网络连接" aria-label="手机扫码">
+          <button class="icon-btn" id="qrBtn" title="手机连接 / 二维码" aria-label="手机连接">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="7" height="7"></rect>
               <rect x="14" y="3" width="7" height="7"></rect>
@@ -45,8 +45,8 @@
       <!-- Date Title & Quick Stats -->
       <div class="date-hero">
         <div class="date-hero-left">
-          <div class="current-date-text" id="headerDateText">2026年10月21日</div>
-          <div class="current-weekday-text" id="headerWeekdayText">星期三</div>
+          <div class="current-date-text" id="headerDateText">2026年10月22日</div>
+          <div class="current-weekday-text" id="headerWeekdayText">星期四</div>
         </div>
         <div class="stats-pills">
           <div class="stat-pill pending">
@@ -99,7 +99,7 @@
       <div class="empty-state" id="emptyState" style="display: none;">
         <div class="empty-icon">☕</div>
         <h3 class="empty-title">当前暂无待办事项</h3>
-        <p class="empty-desc">该视图下所有任务已全部核销完成，或点击下方 <b>+</b> 按钮新建</p>
+        <p class="empty-desc">点击下方 <b>+</b> 按钮新建，或由电脑端 Agent 为您添加</p>
       </div>
     </main>
 
@@ -115,8 +115,100 @@
   <!-- Toast Notification -->
   <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 
-  <!-- Dialog for Adding / Editing Todo -->
-  <dialog id="todoDialog" class="modern-dialog" closedby="any" aria-labelledby="dialogTitle">
+  <!-- Dialog 1: Task Detail View (点进任务查看详细信息) -->
+  <dialog id="detailDialog" class="modern-dialog detail-dialog" closedby="any" aria-labelledby="detailTitle">
+    <div class="dialog-content detail-content">
+      <div class="detail-header-bar">
+        <div class="detail-tags-wrap" id="detailTagsWrap">
+          <span class="meta-chip chip-cat" id="detailCategoryTag">工作</span>
+          <span class="meta-chip chip-priority" id="detailPriorityTag">🔴 紧急</span>
+          <span class="meta-chip chip-source" id="detailSourceTag">🤖 Agent</span>
+        </div>
+        <button type="button" class="dialog-close-btn" id="closeDetailBtn" aria-label="关闭">&times;</button>
+      </div>
+
+      <!-- Detail Title -->
+      <h2 class="detail-main-title" id="detailTitle">任务标题</h2>
+
+      <!-- Status Action Bar -->
+      <div class="detail-status-card" id="detailStatusCard">
+        <div class="status-left">
+          <span class="status-indicator-dot" id="detailStatusDot"></span>
+          <div class="status-texts">
+            <span class="status-state-name" id="detailStatusName">待完成</span>
+            <span class="status-sub-info" id="detailStatusSub">点击右侧按钮核销</span>
+          </div>
+        </div>
+        <button type="button" class="action-toggle-btn" id="detailToggleBtn">
+          <span id="detailToggleIcon">✓</span> <span id="detailToggleText">完成核销</span>
+        </button>
+      </div>
+
+      <!-- Time & Timeline Matrix -->
+      <div class="detail-section">
+        <h4 class="detail-section-heading">⏰ 时间信息</h4>
+        <div class="time-matrix-grid">
+          <div class="time-matrix-item">
+            <span class="time-matrix-label">截止日期时间</span>
+            <span class="time-matrix-val primary-text" id="detailDueTime">2026-10-22 15:30</span>
+          </div>
+          <div class="time-matrix-item">
+            <span class="time-matrix-label">任务发布时间</span>
+            <span class="time-matrix-val" id="detailCreateTime">2026-10-21 23:40</span>
+          </div>
+          <div class="time-matrix-item" id="completedTimeItem" style="display: none;">
+            <span class="time-matrix-label">核销完成时间</span>
+            <span class="time-matrix-val success-text" id="detailCompletedTime">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Description & Specific Content -->
+      <div class="detail-section">
+        <h4 class="detail-section-heading">📝 任务具体内容</h4>
+        <div class="detail-body-text" id="detailContentText">
+          （暂无具体描述内容）
+        </div>
+      </div>
+
+      <!-- Related Links -->
+      <div class="detail-section" id="detailLinksSection" style="display: none;">
+        <h4 class="detail-section-heading">🔗 相关链接 (<span id="detailLinksCount">0</span>)</h4>
+        <div class="detail-links-list" id="detailLinksList">
+          <!-- Links will be dynamically injected here -->
+        </div>
+      </div>
+
+      <!-- Related Images / Photos -->
+      <div class="detail-section" id="detailImagesSection" style="display: none;">
+        <h4 class="detail-section-heading">🖼️ 相关图片附件 (<span id="detailImagesCount">0</span>)</h4>
+        <div class="detail-images-grid" id="detailImagesGrid">
+          <!-- Images will be dynamically injected here -->
+        </div>
+      </div>
+
+      <!-- Footer Action Buttons -->
+      <div class="detail-footer-actions">
+        <button type="button" class="btn btn-secondary" id="detailEditBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+          </svg>
+          编辑任务
+        </button>
+        <button type="button" class="btn btn-danger-subtle" id="detailDeleteBtn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          删除
+        </button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog 2: Add / Edit Task Modal (新建/编辑) -->
+  <dialog id="todoDialog" class="modern-dialog edit-dialog" closedby="any" aria-labelledby="dialogTitle">
     <div class="dialog-content">
       <div class="dialog-header">
         <h3 id="dialogTitle">新建待办事项</h3>
@@ -126,17 +218,17 @@
         <input type="hidden" id="editTodoId" value="">
         
         <div class="form-group">
-          <label for="todoTitleInput">任务名称 <span class="required">*</span></label>
-          <input type="text" id="todoTitleInput" placeholder="例如：提交项目总结报告" required autofocus autocomplete="off">
+          <label for="todoTitleInput">任务标题 <span class="required">*</span></label>
+          <input type="text" id="todoTitleInput" placeholder="例如：提交设计方案总结" required autofocus autocomplete="off">
         </div>
 
         <div class="form-row">
           <div class="form-group">
-            <label for="todoDateInput">日期</label>
+            <label for="todoDateInput">截止日期</label>
             <input type="date" id="todoDateInput" required>
           </div>
           <div class="form-group">
-            <label for="todoTimeInput">时间（可选）</label>
+            <label for="todoTimeInput">截止时间（可选）</label>
             <input type="time" id="todoTimeInput">
           </div>
         </div>
@@ -171,9 +263,34 @@
           </div>
         </div>
 
+        <!-- Rich Content & Description -->
         <div class="form-group">
-          <label for="todoNotesInput">备注说明</label>
-          <textarea id="todoNotesInput" rows="2" placeholder="添加备注细节、地点或链接..."></textarea>
+          <label for="todoContentInput">任务具体内容 / 详细描述</label>
+          <textarea id="todoContentInput" rows="4" placeholder="详细说明任务目标、待办要点、参会准备等..."></textarea>
+        </div>
+
+        <!-- Links Input -->
+        <div class="form-group">
+          <label for="todoLinksInput">相关链接 (每行一个网址，或 '标题 | 网址')</label>
+          <textarea id="todoLinksInput" rows="2" placeholder="例如：设计稿 | https://github.com/design"></textarea>
+        </div>
+
+        <!-- Photos / Images Input -->
+        <div class="form-group">
+          <label>相关图片附件</label>
+          <div class="image-uploader-box">
+            <label for="todoPhotoUpload" class="upload-trigger-btn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              从手机相册选取照片 / 拍照
+            </label>
+            <input type="file" id="todoPhotoUpload" accept="image/*" multiple style="display: none;">
+            <input type="text" id="todoImageUrlsInput" placeholder="或粘贴网络图片网址 (逗号分隔)" style="margin-top: 8px;">
+            <div class="image-thumbnails-preview" id="imageThumbnailsPreview"></div>
+          </div>
         </div>
 
         <div class="dialog-actions">
@@ -184,7 +301,7 @@
     </div>
   </dialog>
 
-  <!-- Dialog for QR Code / Mobile Connection -->
+  <!-- Dialog 3: QR Code / Mobile Connection -->
   <dialog id="qrDialog" class="modern-dialog" closedby="any" aria-labelledby="qrTitle">
     <div class="dialog-content text-center">
       <div class="dialog-header">
@@ -192,7 +309,7 @@
         <button type="button" class="dialog-close-btn" id="closeQrBtn" aria-label="关闭">&times;</button>
       </div>
       <div class="qr-body">
-        <p class="qr-intro">请确保手机与电脑连接在<b>同一个 Wi-Fi 网络</b>下，使用手机相机或微信扫码打开：</p>
+        <p class="qr-intro">手机相机扫码即可直接访问：</p>
         <div class="qr-image-wrapper">
           <img id="qrImage" src="" alt="手机扫码二维码">
         </div>
@@ -200,8 +317,16 @@
           <code id="qrUrlText">http://...</code>
           <button type="button" class="copy-btn" id="copyUrlBtn">复制网址</button>
         </div>
-        <p class="qr-tip">💡 在手机端点击核销任务，电脑端 Agent 将自动实时获知！</p>
+        <p class="qr-tip">💡 在手机端完成核销或编辑，电脑端 Agent 自动实时同步！</p>
       </div>
+    </div>
+  </dialog>
+
+  <!-- Fullscreen Image Preview Dialog -->
+  <dialog id="imagePreviewDialog" class="image-lightbox-dialog" closedby="any">
+    <div class="lightbox-wrapper">
+      <button type="button" class="lightbox-close-btn" id="closeLightboxBtn">&times;</button>
+      <img id="lightboxImg" src="" alt="全屏大图预览">
     </div>
   </dialog>
 

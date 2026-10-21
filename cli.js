@@ -177,13 +177,39 @@ async function main() {
         process.exit(1);
       }
       const flags = parseFlags(args.slice(2));
+
+      // Parse links and images from flags
+      const links = [];
+      if (flags.link) {
+        const linkItems = Array.isArray(flags.link) ? flags.link : [flags.link];
+        linkItems.forEach((l) => {
+          if (l.includes('|')) {
+            const [t, u] = l.split('|');
+            links.push({ title: t.trim(), url: u.trim() });
+          } else {
+            links.push({ title: l.trim(), url: l.trim() });
+          }
+        });
+      }
+
+      const images = [];
+      if (flags.image) {
+        const imgItems = Array.isArray(flags.image) ? flags.image : [flags.image];
+        imgItems.forEach((img) => images.push(img.trim()));
+      }
+
+      const content = flags.content || flags.desc || flags.notes || '';
+
       const payload = {
         title,
         date: flags.date || getTodayStr(),
         time: flags.time || '',
         priority: flags.priority || 'medium',
         category: flags.category || '工作',
-        notes: flags.notes || '',
+        notes: content,
+        content: content,
+        links,
+        images,
         source: 'agent'
       };
 
@@ -193,6 +219,9 @@ async function main() {
           console.log(`\n✨ [Agent -> 云端] 成功添加待办事项：`);
           console.log(`   📌 标题: ${res.todo.title}`);
           console.log(`   📅 日期: ${res.todo.date} ${res.todo.time}`);
+          if (content) console.log(`   📝 详情: ${content}`);
+          if (links.length) console.log(`   🔗 链接: ${links.length} 个`);
+          if (images.length) console.log(`   🖼️ 图片: ${images.length} 张`);
           console.log(`   🆔 ID: ${res.todo.id}\n`);
         } catch (err) {
           console.error(`❌ 云端添加失败: ${err.message}`);
@@ -213,9 +242,55 @@ async function main() {
           console.log(`\n✨ [Agent -> 本地] 成功添加待办事项：`);
           console.log(`   📌 标题: ${newTodo.title}`);
           console.log(`   📅 日期: ${newTodo.date} ${newTodo.time}`);
+          if (content) console.log(`   📝 详情: ${content}`);
+          if (links.length) console.log(`   🔗 链接: ${links.length} 个`);
+          if (images.length) console.log(`   🖼️ 图片: ${images.length} 张`);
           console.log(`   🆔 ID: ${newTodo.id}\n`);
         }
       }
+      break;
+    }
+
+    case 'view':
+    case 'show': {
+      const query = args[1];
+      if (!query) {
+        console.error('❌ 请提供任务 ID 或标题关键字');
+        process.exit(1);
+      }
+      let todos = [];
+      if (isRemote) {
+        const res = await remoteFetch('/api/todos');
+        todos = res.todos || [];
+      } else {
+        todos = readLocalTodos();
+      }
+      const target = todos.find((t) => t.id === query || t.title.includes(query));
+      if (!target) {
+        console.error(`❌ 未找到匹配的任务: "${query}"`);
+        return;
+      }
+      console.log('\n' + '='.repeat(48));
+      console.log(`📌 任务标题: ${target.title}`);
+      console.log(`📊 状态: ${target.completed ? '✅ [已核销]' : '⬜ [待完成]'}`);
+      console.log(`📅 截止时间: ${target.date} ${target.time || '(全天)'}`);
+      console.log(`🕒 发布时间: ${target.createdAt || '-'}`);
+      if (target.completedAt) console.log(`🎉 核销时间: ${target.completedAt}`);
+      console.log(`🏷️  分类: ${target.category} | 优先级: ${target.priority}`);
+      console.log(`🤖 来源: ${target.source}`);
+      console.log(`🆔 ID: ${target.id}`);
+      if (target.content || target.notes) {
+        console.log(`\n📝 任务具体内容:\n${target.content || target.notes}`);
+      }
+      if (target.links && target.links.length > 0) {
+        console.log('\n🔗 相关链接:');
+        target.links.forEach((l) => console.log(`   - ${l.title}: ${l.url}`));
+      }
+      if (target.images && target.images.length > 0) {
+        console.log(`\n🖼️ 附件图片 (${target.images.length} 张):`);
+        target.images.forEach((img) => console.log(`   - ${img.slice(0, 60)}...`));
+      }
+      console.log('='.repeat(48) + '\n');
       break;
     }
 

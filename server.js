@@ -15,7 +15,8 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || ''; // Optional secret token
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Ensure data directory and file exist
@@ -140,7 +141,7 @@ app.get('/api/todos', (req, res) => {
 
 // API: Add todo
 app.post('/api/todos', requireAuth, (req, res) => {
-  const { title, date, time, priority, category, notes } = req.body;
+  const { title, date, time, priority, category, notes, content, links, images } = req.body;
   if (!title || !title.trim()) {
     return res.status(400).json({ error: '标题不能为空' });
   }
@@ -155,6 +156,9 @@ app.post('/api/todos', requireAuth, (req, res) => {
     priority: priority || 'medium',
     category: category || '工作',
     notes: (notes || '').trim(),
+    content: (content || notes || '').trim(),
+    links: Array.isArray(links) ? links : [],
+    images: Array.isArray(images) ? images : [],
     completed: false,
     completedAt: null,
     createdAt: now.toISOString(),
@@ -194,6 +198,9 @@ app.patch('/api/todos/:id', requireAuth, (req, res) => {
   if (updates.priority !== undefined) existing.priority = updates.priority;
   if (updates.category !== undefined) existing.category = updates.category;
   if (updates.notes !== undefined) existing.notes = updates.notes;
+  if (updates.content !== undefined) existing.content = updates.content;
+  if (updates.links !== undefined) existing.links = updates.links;
+  if (updates.images !== undefined) existing.images = updates.images;
   existing.updatedAt = now;
 
   writeTodos(todos);

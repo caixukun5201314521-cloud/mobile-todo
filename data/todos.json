@@ -1,44 +1,67 @@
 [
   {
     "id": "todo-init-1",
-    "title": "🎉 欢迎使用智能代办日历！",
-    "date": "2026-10-21",
-    "time": "23:50",
+    "title": "🎉 欢迎使用智能代办日历看板！",
+    "date": "2026-10-22",
+    "time": "10:00",
     "priority": "medium",
     "category": "生活",
-    "notes": "本系统已成功连接您的电脑与手机。手机端可直接点击圆圈核销任务，电脑端 Agent 也可以随时为您增加、修改或查看日程！",
-    "completed": true,
-    "completedAt": "2026-10-21T15:49:48.105Z",
+    "notes": "点击此卡片可查看完整详情，包含发布时间、截止时间、附件图片与链接！",
+    "content": "欢迎使用新一代个人智能日程看板！\n\n📌 核心特性：\n1. 点击左侧大圆圈可一键完成核销。\n2. 点击卡片任意其它位置，即可滑出当前任务的完整详情面板。\n3. 支持在详情中查看任务发布时间、截止时间、多段内容描述、外链资源以及照片附件。\n4. 电脑端 Agent 可 24h 随时为您新增或修改！",
+    "links": [
+      {
+        "title": "GitHub 项目仓库",
+        "url": "https://github.com/caixukun5201314521-cloud/mobile-todo"
+      }
+    ],
+    "images": [
+      "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=600&auto=format&fit=crop&q=80"
+    ],
+    "completed": false,
+    "completedAt": null,
     "createdAt": "2026-10-21T23:40:00.000Z",
-    "updatedAt": "2026-10-21T15:49:48.105Z",
+    "updatedAt": "2026-10-21T23:40:00.000Z",
     "source": "agent"
   },
   {
     "id": "todo-init-2",
-    "title": "点击复选框测试【完成核销】",
-    "date": "2026-10-21",
-    "time": "23:55",
+    "title": "设计方案评审与原型验收",
+    "date": "2026-10-22",
+    "time": "15:30",
     "priority": "high",
     "category": "工作",
-    "notes": "点击左侧圆圈核销后，电脑端和手机端都会实时同步状态。",
-    "completed": true,
-    "completedAt": "2026-10-21T15:49:47.162Z",
-    "createdAt": "2026-10-21T23:41:00.000Z",
-    "updatedAt": "2026-10-21T15:49:47.162Z",
+    "notes": "准备好移动端体验走查报告，重点关注手势核销流畅度",
+    "content": "【会议议程】\n1. 演示手机端日程流与日历筛选效果。\n2. 确认云端同步延迟与断线重连表现。\n3. 审查任务详情抽屉（时间节点、链接与图片附件）。\n\n【参会准备】\n请提前在手机浏览器中打开测试环境，重点测试弱网环境下的核销体验。",
+    "links": [
+      {
+        "title": "原型设计稿",
+        "url": "https://github.com"
+      }
+    ],
+    "images": [],
+    "completed": false,
+    "completedAt": null,
+    "createdAt": "2026-10-21T23:45:00.000Z",
+    "updatedAt": "2026-10-21T23:45:00.000Z",
     "source": "agent"
   },
   {
     "id": "todo-init-3",
-    "title": "明天早晨核对项目待办",
-    "date": "2026-10-22",
-    "time": "09:30",
-    "priority": "medium",
-    "category": "工作",
-    "notes": "可以在上方日历栏切换到明天（10月22日）进行查看。",
+    "title": "周末户外骑行与摄影",
+    "date": "2026-10-24",
+    "time": "09:00",
+    "priority": "low",
+    "category": "健康",
+    "notes": "检查自行车胎压与相机电池电量",
+    "content": "路线规划：从滨江绿道出发，沿途打卡湿地公园与观景台，全程约 25 公里。\n携带物品：骑行头盔、补给水壶、相机备用电池。",
+    "links": [],
+    "images": [
+      "https://images.unsplash.com/photo-1541625602330-2277a4c46182?w=600&auto=format&fit=crop&q=80"
+    ],
     "completed": false,
     "completedAt": null,
-    "createdAt": "2026-10-21T23:42:00.000Z",
-    "updatedAt": "2026-10-21T23:42:00.000Z",
-    "source": "agent"
+    "createdAt": "2026-10-21T23:50:00.000Z",
+    "updatedAt": "2026-10-21T23:50:00.000Z",
+    "source": "phone"
   }
 ]

@@ -1,5 +1,5 @@
 // ==========================================================================
-// Modern Mobile Todo & Calendar App
+// Modern Mobile Todo & Calendar App - with Rich Details, Links & Images
 // ==========================================================================
 
 const state = {
@@ -8,6 +8,8 @@ const state = {
   weekOffset: 0,
   activeFilter: 'current-date', // 'current-date' | 'all-pending' | 'upcoming' | 'completed'
   theme: localStorage.getItem('todo_theme') || 'auto',
+  activeDetailTodo: null,
+  pendingFormImages: [],
   networkInfo: null
 };
 
@@ -22,6 +24,18 @@ function getFormattedDate(d) {
 function parseDateStr(str) {
   const [y, m, d] = str.split('-').map(Number);
   return new Date(y, m - 1, d);
+}
+
+function formatDisplayDateTime(isoStr) {
+  if (!isoStr) return '-';
+  const d = new Date(isoStr);
+  if (isNaN(d.getTime())) return isoStr;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${day} ${h}:${min}`;
 }
 
 function getDayOfWeekName(d) {
@@ -54,8 +68,8 @@ class SoundEffects {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(587.33, this.ctx.currentTime); // D5
-      osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.12); // A5
+      osc.frequency.setValueAtTime(587.33, this.ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.12);
       gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
       osc.connect(gain);
@@ -83,7 +97,35 @@ const listSectionTitleEl = document.getElementById('listSectionTitle');
 const listSectionBadgeEl = document.getElementById('listSectionBadge');
 const toastContainerEl = document.getElementById('toastContainer');
 
-// Buttons & Dialogs
+// Detail Dialog Elements
+const detailDialog = document.getElementById('detailDialog');
+const closeDetailBtn = document.getElementById('closeDetailBtn');
+const detailCategoryTag = document.getElementById('detailCategoryTag');
+const detailPriorityTag = document.getElementById('detailPriorityTag');
+const detailSourceTag = document.getElementById('detailSourceTag');
+const detailTitleEl = document.getElementById('detailTitle');
+const detailStatusCard = document.getElementById('detailStatusCard');
+const detailStatusDot = document.getElementById('detailStatusDot');
+const detailStatusName = document.getElementById('detailStatusName');
+const detailStatusSub = document.getElementById('detailStatusSub');
+const detailToggleBtn = document.getElementById('detailToggleBtn');
+const detailToggleIcon = document.getElementById('detailToggleIcon');
+const detailToggleText = document.getElementById('detailToggleText');
+const detailDueTime = document.getElementById('detailDueTime');
+const detailCreateTime = document.getElementById('detailCreateTime');
+const completedTimeItem = document.getElementById('completedTimeItem');
+const detailCompletedTime = document.getElementById('detailCompletedTime');
+const detailContentText = document.getElementById('detailContentText');
+const detailLinksSection = document.getElementById('detailLinksSection');
+const detailLinksCount = document.getElementById('detailLinksCount');
+const detailLinksList = document.getElementById('detailLinksList');
+const detailImagesSection = document.getElementById('detailImagesSection');
+const detailImagesCount = document.getElementById('detailImagesCount');
+const detailImagesGrid = document.getElementById('detailImagesGrid');
+const detailEditBtn = document.getElementById('detailEditBtn');
+const detailDeleteBtn = document.getElementById('detailDeleteBtn');
+
+// Add / Edit Dialog Elements
 const addTodoBtn = document.getElementById('addTodoBtn');
 const todoDialog = document.getElementById('todoDialog');
 const closeDialogBtn = document.getElementById('closeDialogBtn');
@@ -95,8 +137,17 @@ const todoTitleInput = document.getElementById('todoTitleInput');
 const todoDateInput = document.getElementById('todoDateInput');
 const todoTimeInput = document.getElementById('todoTimeInput');
 const todoCategoryInput = document.getElementById('todoCategoryInput');
-const todoNotesInput = document.getElementById('todoNotesInput');
+const todoContentInput = document.getElementById('todoContentInput');
+const todoLinksInput = document.getElementById('todoLinksInput');
+const todoPhotoUpload = document.getElementById('todoPhotoUpload');
+const todoImageUrlsInput = document.getElementById('todoImageUrlsInput');
+const imageThumbnailsPreview = document.getElementById('imageThumbnailsPreview');
 const categoryChips = document.getElementById('categoryChips');
+
+// Lightbox & QR Dialog
+const imagePreviewDialog = document.getElementById('imagePreviewDialog');
+const closeLightboxBtn = document.getElementById('closeLightboxBtn');
+const lightboxImg = document.getElementById('lightboxImg');
 
 const qrBtn = document.getElementById('qrBtn');
 const qrDialog = document.getElementById('qrDialog');
@@ -129,8 +180,10 @@ function setupDialogFallback(dialog) {
     });
   }
 }
+setupDialogFallback(detailDialog);
 setupDialogFallback(todoDialog);
 setupDialogFallback(qrDialog);
+setupDialogFallback(imagePreviewDialog);
 
 // ==========================================================================
 // Toast Notification
@@ -180,7 +233,7 @@ themeBtn.addEventListener('click', () => {
 // ==========================================================================
 function getWeekDates(weekOffset) {
   const today = new Date();
-  const currentDay = today.getDay(); // 0 is Sunday, 1 is Monday
+  const currentDay = today.getDay();
   const distanceToMonday = (currentDay + 6) % 7;
   
   const monday = new Date(today);
@@ -199,7 +252,6 @@ function renderCalendarStrip() {
   const week = getWeekDates(state.weekOffset);
   const todayStr = getFormattedDate(new Date());
 
-  // Update month label based on the middle day of the week
   const midDay = week[3];
   calendarMonthLabelEl.textContent = `${midDay.getFullYear()}年 ${midDay.getMonth() + 1}月`;
 
@@ -211,7 +263,6 @@ function renderCalendarStrip() {
     const isToday = dateStr === todayStr;
     const isSelected = dateStr === state.selectedDate && state.activeFilter === 'current-date';
     
-    // Check if there are active (uncompleted) todos on this date
     const hasTodos = state.todos.some((t) => t.date === dateStr && !t.completed);
 
     const cell = document.createElement('button');
@@ -249,7 +300,7 @@ function updateHeaderDateDisplay() {
     headerWeekdayTextEl.textContent = isToday ? `今天 · ${getDayOfWeekName(targetDate)}` : getDayOfWeekName(targetDate);
   } else if (state.activeFilter === 'all-pending') {
     headerDateTextEl.textContent = '全部待办事项';
-    headerWeekdayTextEl.textContent = '按紧急度与日期排列';
+    headerWeekdayTextEl.textContent = '按优先级与时间排列';
   } else if (state.activeFilter === 'upcoming') {
     headerDateTextEl.textContent = '未来日程规划';
     headerWeekdayTextEl.textContent = '明天及以后的事项';
@@ -259,7 +310,6 @@ function updateHeaderDateDisplay() {
   }
 }
 
-// Calendar Navigation buttons
 prevWeekBtn.addEventListener('click', () => {
   state.weekOffset -= 1;
   renderCalendarStrip();
@@ -300,9 +350,7 @@ filterTabs.forEach((tab) => {
   });
 });
 
-// ==========================================================================
 // Category Chips in Modal
-// ==========================================================================
 categoryChips.querySelectorAll('.chip').forEach((chip) => {
   chip.addEventListener('click', () => {
     categoryChips.querySelectorAll('.chip').forEach((c) => c.classList.remove('active'));
@@ -312,7 +360,7 @@ categoryChips.querySelectorAll('.chip').forEach((chip) => {
 });
 
 // ==========================================================================
-// Render Todos & Verification (核销)
+// Render Todos List
 // ==========================================================================
 function renderTodoList() {
   const todayStr = getFormattedDate(new Date());
@@ -337,7 +385,6 @@ function renderTodoList() {
       break;
   }
 
-  // Sort: uncompleted first, then by priority (high > medium > low), then by time
   const priorityOrder = { high: 0, medium: 1, low: 2 };
   filtered.sort((a, b) => {
     if (a.completed !== b.completed) return a.completed ? 1 : -1;
@@ -361,7 +408,6 @@ function renderTodoList() {
     });
   }
 
-  // Update Stats Counters
   const pendingTotal = state.todos.filter((t) => !t.completed).length;
   const completedTotal = state.todos.filter((t) => t.completed).length;
   pendingCountEl.textContent = pendingTotal;
@@ -378,8 +424,22 @@ function createTodoCardElement(todo) {
 
   const timeHtml = todo.time ? `<span class="meta-chip chip-time">⏰ ${todo.time}</span>` : '';
   const dateHtml = state.activeFilter !== 'current-date' ? `<span class="meta-chip chip-time">📅 ${todo.date}</span>` : '';
-  const notesHtml = todo.notes ? `<div class="todo-notes">${escapeHtml(todo.notes)}</div>` : '';
+  
+  // Attachments indicator
+  const linkCount = Array.isArray(todo.links) ? todo.links.length : 0;
+  const imgCount = Array.isArray(todo.images) ? todo.images.length : 0;
+  let attachHtml = '';
+  if (linkCount > 0 || imgCount > 0) {
+    const items = [];
+    if (linkCount > 0) items.push(`🔗${linkCount}`);
+    if (imgCount > 0) items.push(`🖼️${imgCount}`);
+    attachHtml = `<span class="meta-chip chip-attachment-indicator">${items.join(' ')}</span>`;
+  }
+
   const sourceLabel = todo.source === 'agent' ? '<span class="meta-chip chip-source">🤖 Agent</span>' : '';
+  
+  const snippet = todo.content || todo.notes || '';
+  const snippetHtml = snippet ? `<div class="todo-notes">${escapeHtml(snippet)}</div>` : '';
 
   card.innerHTML = `
     <button class="check-btn" type="button" aria-label="${todo.completed ? '取消核销' : '完成核销'}" data-action="toggle">
@@ -389,47 +449,34 @@ function createTodoCardElement(todo) {
         </svg>
       </div>
     </button>
-    <div class="todo-body">
+    <div class="todo-body" data-action="open-detail">
       <div class="todo-title">${escapeHtml(todo.title)}</div>
       <div class="todo-meta">
         ${dateHtml}
         ${timeHtml}
         <span class="meta-chip chip-cat" data-cat="${escapeHtml(todo.category)}">${escapeHtml(todo.category)}</span>
         <span class="meta-chip chip-priority ${todo.priority}">${priorityText}</span>
+        ${attachHtml}
         ${sourceLabel}
       </div>
-      ${notesHtml}
+      ${snippetHtml}
     </div>
-    <div class="todo-actions">
-      <button class="card-action-btn" type="button" aria-label="编辑" data-action="edit" title="编辑">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-        </svg>
-      </button>
-      <button class="card-action-btn" type="button" aria-label="删除" data-action="delete" title="删除">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-        </svg>
-      </button>
+    <div class="card-chevron" data-action="open-detail">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
     </div>
   `;
 
-  // Event delegation on card
+  // Checkbox: toggle completion
   card.querySelector('[data-action="toggle"]').addEventListener('click', (e) => {
     e.stopPropagation();
     toggleTodoVerification(todo);
   });
 
-  card.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    openEditTodoDialog(todo);
-  });
-
-  card.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    deleteTodoItem(todo);
+  // Tap anywhere else on the card: open full details
+  card.addEventListener('click', () => {
+    openTaskDetail(todo);
   });
 
   return card;
@@ -446,18 +493,172 @@ function escapeHtml(str) {
   }[m]));
 }
 
+// Convert URLs in plain text to clickable anchor tags
+function linkifyText(text) {
+  if (!text) return '';
+  const escaped = escapeHtml(text);
+  const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g;
+  return escaped.replace(urlRegex, (url) => {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--primary); text-decoration: underline;">${url}</a>`;
+  });
+}
+
+// ==========================================================================
+// Task Detail Modal Logic (点进任务查看详细信息)
+// ==========================================================================
+function openTaskDetail(todo) {
+  state.activeDetailTodo = todo;
+
+  // Title
+  detailTitleEl.textContent = todo.title;
+
+  // Category & Priority
+  detailCategoryTag.textContent = todo.category || '工作';
+  detailCategoryTag.dataset.cat = todo.category || '工作';
+
+  const priorityLabels = { high: '🔴 紧急重要', medium: '🟡 普通正常', low: '🟢 低优先' };
+  detailPriorityTag.textContent = priorityLabels[todo.priority] || '普通';
+  detailPriorityTag.className = `meta-chip chip-priority ${todo.priority}`;
+
+  detailSourceTag.textContent = todo.source === 'agent' ? '🤖 电脑端 Agent' : '📱 手机添加';
+
+  // Status & Action button
+  updateDetailStatusUI(todo);
+
+  // Time & Timeline Matrix
+  const timeStr = todo.time ? ` ${todo.time}` : ' 全天';
+  detailDueTime.textContent = `${todo.date}${timeStr}`;
+  detailCreateTime.textContent = formatDisplayDateTime(todo.createdAt);
+
+  if (todo.completed && todo.completedAt) {
+    completedTimeItem.style.display = 'flex';
+    detailCompletedTime.textContent = formatDisplayDateTime(todo.completedAt);
+  } else {
+    completedTimeItem.style.display = 'none';
+  }
+
+  // Content text
+  const mainContent = todo.content || todo.notes || '（暂无具体描述内容）';
+  detailContentText.innerHTML = linkifyText(mainContent);
+
+  // Related Links
+  const links = Array.isArray(todo.links) ? todo.links : [];
+  if (links.length > 0) {
+    detailLinksSection.style.display = 'block';
+    detailLinksCount.textContent = links.length;
+    detailLinksList.innerHTML = '';
+    links.forEach((l) => {
+      const card = document.createElement('a');
+      card.className = 'link-card';
+      card.href = l.url;
+      card.target = '_blank';
+      card.rel = 'noopener noreferrer';
+      card.innerHTML = `
+        <span class="link-icon">🔗</span>
+        <div class="link-info">
+          <div class="link-title">${escapeHtml(l.title || l.url)}</div>
+          <div class="link-url">${escapeHtml(l.url)}</div>
+        </div>
+        <span style="color: var(--text-dim); font-size: 14px;">↗</span>
+      `;
+      detailLinksList.appendChild(card);
+    });
+  } else {
+    detailLinksSection.style.display = 'none';
+  }
+
+  // Related Images
+  const images = Array.isArray(todo.images) ? todo.images : [];
+  if (images.length > 0) {
+    detailImagesSection.style.display = 'block';
+    detailImagesCount.textContent = images.length;
+    detailImagesGrid.innerHTML = '';
+    images.forEach((imgUrl) => {
+      const img = document.createElement('img');
+      img.className = 'detail-img-thumb';
+      img.src = imgUrl;
+      img.alt = '任务附件图片';
+      img.loading = 'lazy';
+      img.addEventListener('click', () => {
+        openImageLightbox(imgUrl);
+      });
+      detailImagesGrid.appendChild(img);
+    });
+  } else {
+    detailImagesSection.style.display = 'none';
+  }
+
+  detailDialog.showModal();
+}
+
+function updateDetailStatusUI(todo) {
+  if (todo.completed) {
+    detailStatusDot.className = 'status-indicator-dot completed';
+    detailStatusName.textContent = '已核销完成';
+    detailStatusSub.textContent = `核销时间: ${formatDisplayDateTime(todo.completedAt)}`;
+    detailToggleBtn.className = 'action-toggle-btn is-completed';
+    detailToggleIcon.textContent = '↩️';
+    detailToggleText.textContent = '恢复为待办';
+  } else {
+    detailStatusDot.className = 'status-indicator-dot';
+    detailStatusName.textContent = '待完成';
+    detailStatusSub.textContent = '点击右侧按钮核销此任务';
+    detailToggleBtn.className = 'action-toggle-btn';
+    detailToggleIcon.textContent = '✓';
+    detailToggleText.textContent = '完成核销';
+  }
+}
+
+// Toggle Complete from inside detail dialog
+detailToggleBtn.addEventListener('click', async () => {
+  if (!state.activeDetailTodo) return;
+  await toggleTodoVerification(state.activeDetailTodo);
+  updateDetailStatusUI(state.activeDetailTodo);
+  if (state.activeDetailTodo.completed && state.activeDetailTodo.completedAt) {
+    completedTimeItem.style.display = 'flex';
+    detailCompletedTime.textContent = formatDisplayDateTime(state.activeDetailTodo.completedAt);
+  } else {
+    completedTimeItem.style.display = 'none';
+  }
+});
+
+// Edit from inside detail dialog
+detailEditBtn.addEventListener('click', () => {
+  if (!state.activeDetailTodo) return;
+  const target = state.activeDetailTodo;
+  detailDialog.close();
+  openEditTodoDialog(target);
+});
+
+// Delete from inside detail dialog
+detailDeleteBtn.addEventListener('click', async () => {
+  if (!state.activeDetailTodo) return;
+  const target = state.activeDetailTodo;
+  detailDialog.close();
+  await deleteTodoItem(target);
+});
+
+closeDetailBtn.addEventListener('click', () => detailDialog.close());
+
+// ==========================================================================
+// Lightbox (图片全屏预览)
+// ==========================================================================
+function openImageLightbox(src) {
+  lightboxImg.src = src;
+  imagePreviewDialog.showModal();
+}
+closeLightboxBtn.addEventListener('click', () => imagePreviewDialog.close());
+
 // ==========================================================================
 // Verification (核销) Action
 // ==========================================================================
 async function toggleTodoVerification(todo) {
   const newStatus = !todo.completed;
   
-  // Haptic feedback for mobile
   if (navigator.vibrate) {
     navigator.vibrate(35);
   }
 
-  // Audio feedback
   if (newStatus) {
     sfx.playSuccess();
     showToast(`已核销: ${todo.title}`, '✅');
@@ -465,7 +666,6 @@ async function toggleTodoVerification(todo) {
     showToast(`已恢复为待办: ${todo.title}`, '↩️');
   }
 
-  // Optimistic UI update
   todo.completed = newStatus;
   todo.completedAt = newStatus ? new Date().toISOString() : null;
   renderTodoList();
@@ -481,7 +681,6 @@ async function toggleTodoVerification(todo) {
   } catch (err) {
     console.error('核销失败:', err);
     showToast('核销保存失败，请检查网络连接', '⚠️');
-    // Revert optimistic update
     todo.completed = !newStatus;
     renderTodoList();
     renderCalendarStrip();
@@ -508,7 +707,7 @@ async function deleteTodoItem(todo) {
 }
 
 // ==========================================================================
-// Modal Operations (Add / Edit)
+// Modal Operations (Add / Edit) with Photos & Links
 // ==========================================================================
 function openAddTodoDialog() {
   dialogTitleEl.textContent = '新建待办事项';
@@ -517,7 +716,11 @@ function openAddTodoDialog() {
   todoDateInput.value = state.selectedDate;
   todoTimeInput.value = '';
   todoCategoryInput.value = '工作';
-  todoNotesInput.value = '';
+  todoContentInput.value = '';
+  todoLinksInput.value = '';
+  todoImageUrlsInput.value = '';
+  state.pendingFormImages = [];
+  renderFormImageThumbnails();
 
   categoryChips.querySelectorAll('.chip').forEach((c) => {
     c.classList.toggle('active', c.dataset.cat === '工作');
@@ -536,7 +739,16 @@ function openEditTodoDialog(todo) {
   todoDateInput.value = todo.date;
   todoTimeInput.value = todo.time || '';
   todoCategoryInput.value = todo.category || '工作';
-  todoNotesInput.value = todo.notes || '';
+  todoContentInput.value = todo.content || todo.notes || '';
+  
+  // Format links for textarea
+  const links = Array.isArray(todo.links) ? todo.links : [];
+  todoLinksInput.value = links.map((l) => (l.title ? `${l.title} | ${l.url}` : l.url)).join('\n');
+  
+  // Images
+  state.pendingFormImages = Array.isArray(todo.images) ? [...todo.images] : [];
+  todoImageUrlsInput.value = '';
+  renderFormImageThumbnails();
 
   categoryChips.querySelectorAll('.chip').forEach((c) => {
     c.classList.toggle('active', c.dataset.cat === (todo.category || '工作'));
@@ -548,10 +760,66 @@ function openEditTodoDialog(todo) {
   todoDialog.showModal();
 }
 
+function renderFormImageThumbnails() {
+  imageThumbnailsPreview.innerHTML = '';
+  state.pendingFormImages.forEach((src, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'thumb-preview-wrap';
+    wrap.innerHTML = `
+      <img src="${src}" alt="预览">
+      <button type="button" class="remove-thumb-btn" title="移除">&times;</button>
+    `;
+    wrap.querySelector('.remove-thumb-btn').addEventListener('click', () => {
+      state.pendingFormImages.splice(idx, 1);
+      renderFormImageThumbnails();
+    });
+    imageThumbnailsPreview.appendChild(wrap);
+  });
+}
+
+// Handle Photo File Upload (compressed into base64 Data URL)
+todoPhotoUpload.addEventListener('change', (e) => {
+  const files = Array.from(e.target.files || []);
+  files.forEach((file) => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize image if larger than 1200px to keep storage lightweight
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDimension = 1200;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        state.pendingFormImages.push(compressedDataUrl);
+        renderFormImageThumbnails();
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  todoPhotoUpload.value = '';
+});
+
 addTodoBtn.addEventListener('click', openAddTodoDialog);
 closeDialogBtn.addEventListener('click', () => todoDialog.close());
 cancelDialogBtn.addEventListener('click', () => todoDialog.close());
 
+// Form submit
 todoForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const id = editTodoIdEl.value;
@@ -560,7 +828,28 @@ todoForm.addEventListener('submit', async (e) => {
   const time = todoTimeInput.value;
   const category = todoCategoryInput.value;
   const priority = document.querySelector('input[name="priority"]:checked')?.value || 'medium';
-  const notes = todoNotesInput.value.trim();
+  const content = todoContentInput.value.trim();
+
+  // Parse links
+  const linksRaw = todoLinksInput.value.trim().split('\n');
+  const links = [];
+  linksRaw.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    if (trimmed.includes('|')) {
+      const [t, u] = trimmed.split('|');
+      links.push({ title: t.trim(), url: u.trim() });
+    } else {
+      links.push({ title: trimmed, url: trimmed });
+    }
+  });
+
+  // Parse Image URLs input and combine with uploaded photos
+  const pastedImages = todoImageUrlsInput.value
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const images = [...state.pendingFormImages, ...pastedImages];
 
   if (!title) return;
 
@@ -572,17 +861,17 @@ todoForm.addEventListener('submit', async (e) => {
       const res = await fetch(`/api/todos/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, date, time, category, priority, notes })
+        body: JSON.stringify({ title, date, time, category, priority, content, notes: content, links, images })
       });
       if (res.ok) {
-        showToast('已更新待办事项', '✏️');
+        showToast('已更新待办事项与详细内容', '✏️');
       }
     } else {
       // Create
       const res = await fetch('/api/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, date, time, category, priority, notes, source: 'phone' })
+        body: JSON.stringify({ title, date, time, category, priority, content, notes: content, links, images, source: 'phone' })
       });
       if (res.ok) {
         showToast('新建待办成功', '🎉');
@@ -590,7 +879,7 @@ todoForm.addEventListener('submit', async (e) => {
     }
   } catch (err) {
     console.error('提交失败:', err);
-    showToast('保存失败，请检查连接', '⚠️');
+    showToast('保存失败，请检查网络连接', '⚠️');
   }
 });
 
@@ -630,7 +919,7 @@ function setupSSE() {
 
   evtSource.addEventListener('connected', () => {
     syncStatusEl.querySelector('.status-dot').className = 'status-dot online';
-    syncStatusEl.querySelector('.status-label').textContent = 'Agent 实时在线';
+    syncStatusEl.querySelector('.status-label').textContent = '实时在线';
   });
 
   evtSource.addEventListener('sync', (e) => {
@@ -638,7 +927,7 @@ function setupSSE() {
     state.todos = data.todos;
     renderTodoList();
     renderCalendarStrip();
-    showToast('已与电脑 Agent 状态同步', '🔄');
+    showToast('已与云端状态同步', '🔄');
   });
 
   evtSource.addEventListener('todo_added', (e) => {
@@ -667,7 +956,7 @@ function setupSSE() {
 
   evtSource.onerror = () => {
     syncStatusEl.querySelector('.status-dot').className = 'status-dot offline';
-    syncStatusEl.querySelector('.status-label').textContent = '正在重新连接...';
+    syncStatusEl.querySelector('.status-label').textContent = '连接中断，重试中...';
   };
 }
 
