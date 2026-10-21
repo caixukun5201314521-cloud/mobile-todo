@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121214" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>智能代办日历看板</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20width=%22100%22%20height=%22100%22><text y=%22.9em%22 font-size=%2290%22>📅</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-top">
+        <div class="header-brand">
+          <div class="logo-icon">📅</div>
+          <div class="brand-text">
+            <h1>代办日历</h1>
+            <div class="sync-status" id="syncStatus">
+              <span class="status-dot online"></span>
+              <span class="status-label">Agent 实时在线</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <button class="icon-btn" id="qrBtn" title="手机扫码 / 网络连接" aria-label="手机扫码">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+          </button>
+          <button class="icon-btn" id="themeBtn" title="切换深色/浅色模式" aria-label="切换主题">
+            <span id="themeIcon">🌓</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Date Title & Quick Stats -->
+      <div class="date-hero">
+        <div class="date-hero-left">
+          <div class="current-date-text" id="headerDateText">2026年10月21日</div>
+          <div class="current-weekday-text" id="headerWeekdayText">星期三</div>
+        </div>
+        <div class="stats-pills">
+          <div class="stat-pill pending">
+            <span class="stat-num" id="pendingCount">0</span>
+            <span class="stat-name">待完成</span>
+          </div>
+          <div class="stat-pill completed">
+            <span class="stat-num" id="completedCount">0</span>
+            <span class="stat-name">已核销</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calendar Strip Navigation -->
+      <nav class="calendar-strip-wrapper" aria-label="日历导航">
+        <div class="calendar-controls">
+          <button class="cal-nav-btn" id="prevWeekBtn" aria-label="上一周">‹</button>
+          <div class="calendar-month-label" id="calendarMonthLabel">2026年 10月</div>
+          <div class="calendar-quick-actions">
+            <button class="today-shortcut-btn" id="todayShortcutBtn">今天</button>
+            <button class="cal-nav-btn" id="nextWeekBtn" aria-label="下一周">›</button>
+          </div>
+        </div>
+        <div class="calendar-days-row" id="calendarDaysRow" role="tablist">
+          <!-- Dynamically generated week days -->
+        </div>
+      </nav>
+
+      <!-- Category / View Filter Tabs -->
+      <div class="filter-tabs" role="tablist">
+        <button class="filter-tab active" data-filter="current-date" id="tabCurrentDate">今日事项</button>
+        <button class="filter-tab" data-filter="all-pending" id="tabAllPending">全部待办</button>
+        <button class="filter-tab" data-filter="upcoming" id="tabUpcoming">未来待办</button>
+        <button class="filter-tab" data-filter="completed" id="tabCompleted">已核销归档</button>
+      </div>
+    </header>
+
+    <!-- Main Todo List Section -->
+    <main class="todo-main" id="todoMain">
+      <div class="section-title-bar">
+        <h2 class="section-title" id="listSectionTitle">待办事项</h2>
+        <span class="section-badge" id="listSectionBadge">0 项</span>
+      </div>
+
+      <div class="todos-list" id="todosList" role="list">
+        <!-- Rendered todo cards -->
+      </div>
+
+      <!-- Empty state container -->
+      <div class="empty-state" id="emptyState" style="display: none;">
+        <div class="empty-icon">☕</div>
+        <h3 class="empty-title">当前暂无待办事项</h3>
+        <p class="empty-desc">该视图下所有任务已全部核销完成，或点击下方 <b>+</b> 按钮新建</p>
+      </div>
+    </main>
+
+    <!-- Floating Action Button (FAB) -->
+    <button class="fab-btn" id="addTodoBtn" aria-label="新建待办事项">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <!-- Dialog for Adding / Editing Todo -->
+  <dialog id="todoDialog" class="modern-dialog" closedby="any" aria-labelledby="dialogTitle">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3 id="dialogTitle">新建待办事项</h3>
+        <button type="button" class="dialog-close-btn" id="closeDialogBtn" aria-label="关闭">&times;</button>
+      </div>
+      <form id="todoForm" method="dialog">
+        <input type="hidden" id="editTodoId" value="">
+        
+        <div class="form-group">
+          <label for="todoTitleInput">任务名称 <span class="required">*</span></label>
+          <input type="text" id="todoTitleInput" placeholder="例如：提交项目总结报告" required autofocus autocomplete="off">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="todoDateInput">日期</label>
+            <input type="date" id="todoDateInput" required>
+          </div>
+          <div class="form-group">
+            <label for="todoTimeInput">时间（可选）</label>
+            <input type="time" id="todoTimeInput">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>所属分类</label>
+          <div class="category-chips" id="categoryChips">
+            <button type="button" class="chip active" data-cat="工作">💼 工作</button>
+            <button type="button" class="chip" data-cat="生活">🌿 生活</button>
+            <button type="button" class="chip" data-cat="学习">📚 学习</button>
+            <button type="button" class="chip" data-cat="健康">🏃 健身</button>
+            <button type="button" class="chip" data-cat="待办">⚡ 待办</button>
+          </div>
+          <input type="hidden" id="todoCategoryInput" value="工作">
+        </div>
+
+        <div class="form-group">
+          <label>优先级</label>
+          <div class="priority-selector" id="prioritySelector">
+            <label class="p-option high">
+              <input type="radio" name="priority" value="high">
+              <span class="p-pill">🔴 紧急重要</span>
+            </label>
+            <label class="p-option medium">
+              <input type="radio" name="priority" value="medium" checked>
+              <span class="p-pill">🟡 普通正常</span>
+            </label>
+            <label class="p-option low">
+              <input type="radio" name="priority" value="low">
+              <span class="p-pill">🟢 低优先</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="todoNotesInput">备注说明</label>
+          <textarea id="todoNotesInput" rows="2" placeholder="添加备注细节、地点或链接..."></textarea>
+        </div>
+
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-secondary" id="cancelDialogBtn">取消</button>
+          <button type="submit" class="btn btn-primary" id="saveTodoBtn">保存事项</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Dialog for QR Code / Mobile Connection -->
+  <dialog id="qrDialog" class="modern-dialog" closedby="any" aria-labelledby="qrTitle">
+    <div class="dialog-content text-center">
+      <div class="dialog-header">
+        <h3 id="qrTitle">📱 手机访问与连接</h3>
+        <button type="button" class="dialog-close-btn" id="closeQrBtn" aria-label="关闭">&times;</button>
+      </div>
+      <div class="qr-body">
+        <p class="qr-intro">请确保手机与电脑连接在<b>同一个 Wi-Fi 网络</b>下，使用手机相机或微信扫码打开：</p>
+        <div class="qr-image-wrapper">
+          <img id="qrImage" src="" alt="手机扫码二维码">
+        </div>
+        <div class="qr-url-box">
+          <code id="qrUrlText">http://...</code>
+          <button type="button" class="copy-btn" id="copyUrlBtn">复制网址</button>
+        </div>
+        <p class="qr-tip">💡 在手机端点击核销任务，电脑端 Agent 将自动实时获知！</p>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

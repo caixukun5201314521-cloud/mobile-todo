@@ -1,0 +1,44 @@
+[
+  {
+    "id": "todo-init-1",
+    "title": "🎉 欢迎使用智能代办日历！",
+    "date": "2026-10-21",
+    "time": "23:50",
+    "priority": "medium",
+    "category": "生活",
+    "notes": "本系统已成功连接您的电脑与手机。手机端可直接点击圆圈核销任务，电脑端 Agent 也可以随时为您增加、修改或查看日程！",
+    "completed": true,
+    "completedAt": "2026-10-21T15:49:48.105Z",
+    "createdAt": "2026-10-21T23:40:00.000Z",
+    "updatedAt": "2026-10-21T15:49:48.105Z",
+    "source": "agent"
+  },
+  {
+    "id": "todo-init-2",
+    "title": "点击复选框测试【完成核销】",
+    "date": "2026-10-21",
+    "time": "23:55",
+    "priority": "high",
+    "category": "工作",
+    "notes": "点击左侧圆圈核销后，电脑端和手机端都会实时同步状态。",
+    "completed": true,
+    "completedAt": "2026-10-21T15:49:47.162Z",
+    "createdAt": "2026-10-21T23:41:00.000Z",
+    "updatedAt": "2026-10-21T15:49:47.162Z",
+    "source": "agent"
+  },
+  {
+    "id": "todo-init-3",
+    "title": "明天早晨核对项目待办",
+    "date": "2026-10-22",
+    "time": "09:30",
+    "priority": "medium",
+    "category": "工作",
+    "notes": "可以在上方日历栏切换到明天（10月22日）进行查看。",
+    "completed": false,
+    "completedAt": null,
+    "createdAt": "2026-10-21T23:42:00.000Z",
+    "updatedAt": "2026-10-21T23:42:00.000Z",
+    "source": "agent"
+  }
+]
