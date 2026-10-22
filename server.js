@@ -74,8 +74,10 @@ export function createApp(options = {}) {
   });
 
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // Base64 photos inflate ~33% in JSON; keep the body cap generous since the
+  // client no longer enforces a per-image size limit.
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '50mb' }));
   app.use(express.static(path.join(__dirname, 'public')));
   const requireAuth = authMiddleware(apiKey);
 

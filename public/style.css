@@ -186,6 +186,15 @@ ul, ol { margin: 0; padding-left: 1.4em; }
 .hero-subtitle { max-width: 430px; margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.9; }
 .hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 24px; }
 .hero-actions .button { min-height: 42px; }
+/* Bike locator shortcut: the wordmark carries the “art text” treatment. */
+.bike-button { display: inline-flex; align-items: center; gap: 9px; min-height: 42px; padding: 7px 17px 7px 8px; border: 1px solid var(--border-strong); border-radius: 999px; background: var(--surface); cursor: pointer; transition: border-color .18s var(--ease), box-shadow .18s var(--ease), transform .18s var(--ease); }
+.bike-button:hover { border-color: var(--purple); box-shadow: 0 0 0 3px var(--purple-soft); }
+.bike-button:active { transform: scale(.97); }
+.bike-button-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--purple-soft); color: var(--purple); }
+.bike-button-icon svg { width: 16px; height: 16px; }
+.bike-word { font-family: "Didot", "Bodoni 72", "Playfair Display", "Times New Roman", Georgia, serif; font-style: italic; font-weight: 700; font-size: 22px; letter-spacing: .045em; line-height: 1; padding-bottom: 2px; background: linear-gradient(115deg, var(--blue) 12%, var(--purple) 88%); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+.bike-button-label { color: var(--muted); font-size: 11px; }
+.bike-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
 .hero-footnote { margin-top: 16px; color: var(--muted); font-size: 10px; }
 .hero-art { position: relative; display: grid; place-items: center; min-width: 0; min-height: 230px; }
 .orbit-ring { position: relative; display: grid; place-items: center; width: 218px; height: 218px; padding: 13px; border-radius: 50%; background: conic-gradient(from -90deg, var(--chart-accent) 0% var(--progress, 0%), var(--ring-track) var(--progress, 0%) 100%); box-shadow: 0 0 0 10px rgb(126 149 193 / 5%), 0 12px 34px rgb(64 93 151 / 9%); }
@@ -755,6 +764,8 @@ img.qr-code { display: block; width: 250px; height: auto; }
   .hero-subtitle { margin-top: 10px; font-size: 11px; }
   .hero-actions { gap: 10px; margin-top: 19px; }
   .hero-actions .button { min-height: 44px; padding-inline: 15px; }
+  .hero-actions .bike-button { min-height: 44px; padding: 6px 14px 6px 7px; }
+  .bike-word { font-size: 20px; }
   .hero-art { min-height: 175px; }
   .orbit-ring { width: 154px; height: 154px; padding: 10px; }
   .orbit-ring-inner { padding: 10px; border-width: 3px; }
