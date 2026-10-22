@@ -1,18 +1,25 @@
 {
   "name": "mobile-todo",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "todo": "node cli.js"
+    "start:bun": "bun server.js",
+    "dev": "bun --watch server.js",
+    "todo": "node cli.js",
+    "test": "bun test",
+    "test:e2e": "bun test/browser.e2e.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "Mobile-first calendar & todo list with real-time Agent sync",
+  "description": "Daymark — personal tasks, training, learning, papers and finance records with agent-ready exports",
   "dependencies": {
     "express": "^5.3.0",
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.1"
   }
 }

@@ -3,10 +3,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createStore } from './lib/store.js';
+import { newSession } from './lib/validation.js';
+import { createTodo } from './lib/models.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DATA_FILE = path.join(__dirname, 'data', 'todos.json');
+const store = createStore({ dataPath: process.env.DATA_PATH, baseDir: __dirname });
 const CONFIG_FILE = path.join(__dirname, '.config.json');
 
 function loadConfig() {
@@ -38,22 +41,41 @@ function getTodayStr() {
 // Local File Operations
 function readLocalTodos() {
   try {
-    if (!fs.existsSync(DATA_FILE)) return [];
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8') || '[]');
+    return store.read('todos');
   } catch (err) {
     console.error('读取本地待办失败:', err.message);
-    return [];
+    throw err;
   }
 }
 
-function writeLocalTodos(todos) {
+function writeLocalTodos(expectedTodos, updatedTodos) {
   try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(todos, null, 2), 'utf-8');
+    store.mutate('todos', current => {
+      if (JSON.stringify(current) !== JSON.stringify(expectedTodos)) {
+        throw new Error('数据已被服务器或其他进程修改；请重试以免覆盖更新');
+      }
+      return updatedTodos;
+    });
     return true;
   } catch (err) {
     console.error('保存本地待办失败:', err.message);
+    process.exitCode = 1;
     return false;
   }
+}
+
+function completionInput(flags) {
+  if (!flags.start || !flags.end || flags.minutes === undefined) {
+    throw new Error('完成任务必须提供 --start <带时区ISO> --end <带时区ISO> --minutes <正数>');
+  }
+  const input = {
+    startAt: flags.start,
+    endAt: flags.end,
+    durationMinutes: Number(flags.minutes),
+    notes: flags.notes || ''
+  };
+  if (flags.energy !== undefined) input.energy = Number(flags.energy);
+  return input;
 }
 
 // Remote API Operations
@@ -202,6 +224,9 @@ async function main() {
 
       const payload = {
         title,
+        module: flags.module || 'life',
+        subject: flags.subject || '',
+        estimatedMinutes: flags.minutes === undefined ? null : Number(flags.minutes),
         date: flags.date || getTodayStr(),
         time: flags.time || '',
         priority: flags.priority || 'medium',
@@ -228,17 +253,9 @@ async function main() {
         }
       } else {
         const todos = readLocalTodos();
-        const now = new Date();
-        const newTodo = {
-          id: `todo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          ...payload,
-          completed: false,
-          completedAt: null,
-          createdAt: now.toISOString(),
-          updatedAt: now.toISOString(),
-        };
-        todos.unshift(newTodo);
-        if (writeLocalTodos(todos)) {
+        const newTodo = createTodo(payload);
+        const nextTodos = [newTodo, ...todos];
+        if (writeLocalTodos(todos, nextTodos)) {
           console.log(`\n✨ [Agent -> 本地] 成功添加待办事项：`);
           console.log(`   📌 标题: ${newTodo.title}`);
           console.log(`   📅 日期: ${newTodo.date} ${newTodo.time}`);
@@ -301,6 +318,10 @@ async function main() {
         console.error('❌ 请提供要核销的任务 ID 或标题关键字');
         process.exit(1);
       }
+      const flags = parseFlags(args.slice(2));
+      let completion;
+      try { completion = completionInput(flags); newSession(completion); }
+      catch (err) { console.error(`❌ ${err.message}`); process.exitCode = 1; return; }
 
       if (isRemote) {
         const { todos } = await remoteFetch('/api/todos');
@@ -309,7 +330,7 @@ async function main() {
           console.error(`❌ 未找到匹配的任务: "${query}"`);
           return;
         }
-        await remoteFetch(`/api/todos/${encodeURIComponent(target.id)}`, 'PATCH', { completed: true });
+        await remoteFetch(`/api/todos/${encodeURIComponent(target.id)}`, 'PATCH', { completed: true, completion });
         console.log(`\n🎉 [Agent -> 云端] 成功核销任务：【${target.title}】 (ID: ${target.id})\n`);
       } else {
         const todos = readLocalTodos();
@@ -318,10 +339,21 @@ async function main() {
           console.error(`❌ 未找到匹配的任务: "${query}"`);
           return;
         }
-        target.completed = true;
-        target.completedAt = new Date().toISOString();
-        target.updatedAt = new Date().toISOString();
-        if (writeLocalTodos(todos)) {
+        if (target.completed) {
+          console.error('❌ 该任务已经完成；请先撤销完成后再核销');
+          return;
+        }
+        const now = Date.now();
+        const completedSession = newSession(completion, now);
+        const updated = {
+          ...target,
+          completed: true,
+          completedAt: new Date(now).toISOString(),
+          timeEntries: [...(Array.isArray(target.timeEntries) ? target.timeEntries : []), completedSession],
+          updatedAt: new Date(now).toISOString()
+        };
+        const nextTodos = todos.map(todo => todo.id === target.id ? updated : todo);
+        if (writeLocalTodos(todos, nextTodos)) {
           console.log(`\n🎉 [Agent -> 本地] 成功核销任务：【${target.title}】 (ID: ${target.id})\n`);
         }
       }
@@ -352,10 +384,9 @@ async function main() {
           console.error(`❌ 未找到匹配的任务: "${query}"`);
           return;
         }
-        target.completed = false;
-        target.completedAt = null;
-        target.updatedAt = new Date().toISOString();
-        if (writeLocalTodos(todos)) {
+        const updated = { ...target, completed: false, completedAt: null, updatedAt: new Date().toISOString() };
+        const nextTodos = todos.map(todo => todo.id === target.id ? updated : todo);
+        if (writeLocalTodos(todos, nextTodos)) {
           console.log(`\n↩️ [Agent -> 本地] 已恢复任务为待办：【${target.title}】\n`);
         }
       }
@@ -387,7 +418,7 @@ async function main() {
           console.error(`❌ 未找到匹配的任务: "${query}"`);
           return;
         }
-        if (writeLocalTodos(remaining)) {
+        if (writeLocalTodos(todos, remaining)) {
           console.log(`\n🗑️ [Agent -> 本地] 已成功删除任务（已移除 ${initialLen - remaining.length} 项）\n`);
         }
       }
@@ -396,12 +427,22 @@ async function main() {
 
     case 'bike': {
       const sub = args[1];
-      const bikeFile = path.join(__dirname, 'data', 'bike.json');
       if (sub === 'clear' || sub === 'finish') {
         if (isRemote) {
           await remoteFetch('/api/bike/clear', 'POST');
         } else {
-          fs.writeFileSync(bikeFile, JSON.stringify({ active: false, retrievedAt: new Date().toISOString() }, null, 2), 'utf-8');
+          try {
+            const before = store.read('bike');
+            const cleared = { ...before, active: false, retrievedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+            store.mutate('bike', current => {
+              if (JSON.stringify(current) !== JSON.stringify(before)) throw new Error('单车数据已被服务器或其他进程修改；请重试');
+              return cleared;
+            });
+          } catch (err) {
+            console.error(`❌ 单车归档失败: ${err.message}`);
+            process.exitCode = 1;
+            return;
+          }
         }
         console.log('\n🎉 [Agent] 已确认取车，单车停放记录已归档核销！\n');
         return;
@@ -412,9 +453,7 @@ async function main() {
         const res = await remoteFetch('/api/bike');
         bike = res.bike || { active: false };
       } else {
-        if (fs.existsSync(bikeFile)) {
-          bike = JSON.parse(fs.readFileSync(bikeFile, 'utf-8') || '{"active":false}');
-        }
+        bike = store.read('bike');
       }
 
       console.log('\n' + '='.repeat(48));

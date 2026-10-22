@@ -1,342 +1,264 @@
 import express from 'express';
 import fs from 'node:fs';
-import path from 'node:path';
 import os from 'node:os';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import QRCode from 'qrcode';
+import { AppError, fail } from './lib/validation.js';
+import { createStore } from './lib/store.js';
+import { appendSession, clearBike, createEntity, createTodo, parkBike, updateEntity, updateSettings, updateTodo } from './lib/models.js';
+import { buildExport } from './lib/exports.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Allow configurable data path for cloud container volumes
-const DATA_DIR = process.env.DATA_PATH || path.join(__dirname, 'data');
-const DATA_FILE = path.extname(DATA_DIR) ? DATA_DIR : path.join(DATA_DIR, 'todos.json');
-const BIKE_FILE = path.join(path.dirname(DATA_FILE), 'bike.json');
-const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.API_KEY || ''; // Optional secret token
-
-const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-
-// Ensure data directory and files exist
-if (!fs.existsSync(path.dirname(DATA_FILE))) {
-  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-}
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, '[]', 'utf-8');
-}
-if (!fs.existsSync(BIKE_FILE)) {
-  fs.writeFileSync(BIKE_FILE, '{"active":false}', 'utf-8');
-}
-
-function readBike() {
-  try {
-    if (!fs.existsSync(BIKE_FILE)) return { active: false };
-    return JSON.parse(fs.readFileSync(BIKE_FILE, 'utf-8') || '{"active":false}');
-  } catch (err) {
-    console.error('读取单车位置失败:', err);
-    return { active: false };
-  }
-}
-
-function writeBike(data) {
-  try {
-    fs.writeFileSync(BIKE_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    return true;
-  } catch (err) {
-    console.error('写入单车位置失败:', err);
-    return false;
-  }
-}
-
-// In-memory SSE clients
-const sseClients = new Set();
-
-function broadcastEvent(type, data) {
-  const payload = `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const client of sseClients) {
-    try {
-      client.write(payload);
-    } catch {
-      sseClients.delete(client);
-    }
-  }
-}
-
-// Watch data file for external edits (e.g. from Agent or CLI)
-let fileDebounceTimer = null;
-let lastKnownFileHash = '';
-
-function getFileHash() {
-  try {
-    const stats = fs.statSync(DATA_FILE);
-    return `${stats.mtimeMs}-${stats.size}`;
-  } catch {
-    return '';
-  }
-}
-lastKnownFileHash = getFileHash();
-
-try {
-  fs.watch(DATA_FILE, () => {
-    clearTimeout(fileDebounceTimer);
-    fileDebounceTimer = setTimeout(() => {
-      const currentHash = getFileHash();
-      if (currentHash !== lastKnownFileHash) {
-        lastKnownFileHash = currentHash;
-        const todos = readTodos();
-        broadcastEvent('sync', { action: 'file_changed', todos });
-      }
-    }, 100);
-  });
-} catch (err) {
-  console.warn('文件热监听启动警告:', err.message);
-}
-
-function readTodos() {
-  try {
-    const content = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(content || '[]');
-  } catch (err) {
-    console.error('读取数据文件错误:', err);
-    return [];
-  }
-}
-
-function writeTodos(todos) {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(todos, null, 2), 'utf-8');
-    lastKnownFileHash = getFileHash();
-    return true;
-  } catch (err) {
-    console.error('写入数据文件错误:', err);
-    return false;
-  }
-}
-
-function getLocalIpAddresses() {
+export function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
   const addresses = [];
   for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name] || []) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        addresses.push(iface.address);
-      }
-    }
+    for (const iface of interfaces[name] || []) if (iface.family === 'IPv4' && !iface.internal) addresses.push(iface.address);
   }
   return addresses;
 }
 
-// Optional Auth Middleware for write API
-function requireAuth(req, res, next) {
-  if (!API_KEY) return next();
-  const providedKey = req.headers['x-api-key'] || req.query.key;
-  if (providedKey === API_KEY) return next();
-  return res.status(401).json({ error: '未经授权：缺少或无效的 API 密钥' });
+function jsonError(res, error) {
+  if (error instanceof AppError) return res.status(error.status).json({ error: error.message, code: error.code });
+  if (error?.type === 'entity.parse.failed') return res.status(400).json({ error: '请求 JSON 格式无效' });
+  console.error('request failed:', error?.message || error);
+  return res.status(500).json({ error: '服务器无法处理请求' });
+}
+function routeError(handler) {
+  return (req, res, next) => {
+    try { const result = handler(req, res, next); if (result?.catch) result.catch(error => jsonError(res, error)); }
+    catch (error) { jsonError(res, error); }
+  };
+}
+function authMiddleware(apiKey) {
+  return (req, res, next) => {
+    if (!apiKey) return next();
+    const supplied = req.headers['x-api-key'] || req.query.key;
+    if (supplied === apiKey) return next();
+    return res.status(401).json({ error: '未经授权：缺少或无效的 API 密钥' });
+  };
+}
+function sendEntity(res, singular, value, status = 200) { return res.status(status).json({ success: true, [singular]: value }); }
+function entityKeyForPath(name) { return name === 'study-sessions' ? 'studySessions' : name; }
+const ENTITY_ROUTES = [
+  { route: 'workouts', key: 'workouts', singular: 'workout' },
+  { route: 'study-sessions', key: 'studySessions', singular: 'studySession' },
+  { route: 'papers', key: 'papers', singular: 'paper' },
+  { route: 'transactions', key: 'transactions', singular: 'transaction' }
+];
+
+export function createApp(options = {}) {
+  const app = express();
+  const port = Number(options.port ?? process.env.PORT ?? 3000);
+  const host = options.host ?? process.env.HOST ?? '0.0.0.0';
+  const apiKey = options.apiKey ?? process.env.API_KEY ?? '';
+  const store = options.store || createStore({ dataPath: options.dataPath ?? process.env.DATA_PATH, baseDir: __dirname });
+  const clients = new Set();
+  let closed = false;
+  const broadcast = (event, payload) => {
+    const output = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
+    for (const client of clients) {
+      try { client.write(output); } catch { clients.delete(client); }
+    }
+  };
+  const broadcastChanged = (key, value) => {
+    if (key === 'todos') broadcast('sync', { action: 'file_changed', todos: value });
+    if (key === 'bike') broadcast('bike_updated', { bike: value });
+    broadcast('data_changed', { dataset: key, action: 'file_changed' });
+  };
+  if (options.watch !== false) store.watch((key, value) => { if (!closed) broadcastChanged(key, value); }, key => {
+    if (!closed) broadcast('data_changed', { dataset: key, error: '数据文件不可用或格式无效，请恢复有效数据' });
+  });
+
+  app.disable('x-powered-by');
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(express.static(path.join(__dirname, 'public')));
+  const requireAuth = authMiddleware(apiKey);
+
+  // Network metadata and QR are intentionally public: they contain no personal data.
+  app.get('/api/network', routeError(async (req, res) => {
+    const ips = getLocalIpAddresses();
+    const configuredPort = Number.isFinite(port) ? port : 3000;
+    const hostHeader = req.get('host') || `${ips[0] || 'localhost'}:${configuredPort}`;
+    const protocol = req.protocol || 'http';
+    const url = `${protocol}://${hostHeader}`;
+    let qrDataUrl = '';
+    try { qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 256 }); } catch (error) { console.error('QR code generation failed:', error.message); }
+    res.json({ ips, port: configuredPort, primaryUrl: url, qrDataUrl, activeConnections: clients.size });
+  }));
+
+  app.get('/api/events', requireAuth, routeError((req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders?.();
+    res.write(`event: connected\ndata: ${JSON.stringify({ time: new Date().toISOString() })}\n\n`);
+    clients.add(res);
+    const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch {} }, 25_000);
+    ping.unref?.();
+    req.on('close', () => { clearInterval(ping); clients.delete(res); });
+  }));
+
+  app.get('/api/state', requireAuth, routeError((req, res) => res.json({ success: true, ...store.state() })));
+  app.get('/api/todos', requireAuth, routeError((req, res) => res.json({ success: true, todos: store.read('todos') })));
+  app.post('/api/todos', requireAuth, routeError((req, res) => {
+    const now = Date.now();
+    const todo = createTodo(req.body, now);
+    const todos = store.mutate('todos', list => [todo, ...list]);
+    broadcast('todo_added', { todo, todos });
+    res.status(201).json({ success: true, todo });
+  }));
+  app.patch('/api/todos/:id', requireAuth, routeError((req, res) => {
+    const now = Date.now();
+    let updated;
+    const todos = store.mutate('todos', list => {
+      const index = list.findIndex(item => item.id === req.params.id);
+      if (index < 0) fail('未找到待办事项', 404, 'NOT_FOUND');
+      updated = updateTodo(list[index], req.body, now);
+      const copy = [...list]; copy[index] = updated; return copy;
+    });
+    broadcast('todo_updated', { todo: updated, todos });
+    res.json({ success: true, todo: updated });
+  }));
+  app.post('/api/todos/:id/sessions', requireAuth, routeError((req, res) => {
+    const now = Date.now(); let updated; let entry;
+    const todos = store.mutate('todos', list => {
+      const index = list.findIndex(item => item.id === req.params.id);
+      if (index < 0) fail('未找到待办事项', 404, 'NOT_FOUND');
+      ({ record: updated, entry } = appendSession(list[index], req.body, now));
+      const copy = [...list]; copy[index] = updated; return copy;
+    });
+    broadcast('todo_updated', { todo: updated, todos });
+    res.status(201).json({ success: true, todo: updated, session: entry });
+  }));
+  app.delete('/api/todos/:id', requireAuth, routeError((req, res) => {
+    let removed;
+    const todos = store.mutate('todos', list => {
+      const index = list.findIndex(item => item.id === req.params.id);
+      if (index < 0) fail('未找到待办事项', 404, 'NOT_FOUND');
+      [removed] = list.splice(index, 1); return list;
+    });
+    broadcast('todo_deleted', { id: req.params.id, removed, todos });
+    res.json({ success: true, removed });
+  }));
+
+  for (const definition of ENTITY_ROUTES) {
+    const { route, key, singular } = definition;
+    app.get(`/api/${route}`, requireAuth, routeError((req, res) => res.json({ success: true, [key]: store.read('life')[key] })));
+    app.get(`/api/${route}/:id`, requireAuth, routeError((req, res) => {
+      const entity = store.read('life')[key].find(item => item.id === req.params.id);
+      if (!entity) fail('未找到记录', 404, 'NOT_FOUND');
+      return sendEntity(res, singular, entity);
+    }));
+    app.post(`/api/${route}`, requireAuth, routeError((req, res) => {
+      const now = Date.now(); const entity = createEntity(key, req.body, now);
+      store.mutate('life', life => ({ ...life, [key]: [entity, ...life[key]] }));
+      broadcast('data_changed', { dataset: key, [singular]: entity, state: store.state() });
+      return sendEntity(res, singular, entity, 201);
+    }));
+    app.patch(`/api/${route}/:id`, requireAuth, routeError((req, res) => {
+      const now = Date.now(); let updated;
+      store.mutate('life', life => {
+        const index = life[key].findIndex(item => item.id === req.params.id);
+        if (index < 0) fail('未找到记录', 404, 'NOT_FOUND');
+        updated = updateEntity(key, life[key][index], req.body, now);
+        const items = [...life[key]]; items[index] = updated; return { ...life, [key]: items };
+      });
+      broadcast('data_changed', { dataset: key, [singular]: updated, state: store.state() });
+      return sendEntity(res, singular, updated);
+    }));
+    app.delete(`/api/${route}/:id`, requireAuth, routeError((req, res) => {
+      let removed;
+      store.mutate('life', life => {
+        const index = life[key].findIndex(item => item.id === req.params.id);
+        if (index < 0) fail('未找到记录', 404, 'NOT_FOUND');
+        const items = [...life[key]]; [removed] = items.splice(index, 1); return { ...life, [key]: items };
+      });
+      broadcast('data_changed', { dataset: key, id: req.params.id, removed, state: store.state() });
+      return res.json({ success: true, removed });
+    }));
+    if (key === 'papers') {
+      app.post(`/api/${route}/:id/sessions`, requireAuth, routeError((req, res) => {
+        const now = Date.now(); let updated; let entry;
+        store.mutate('life', life => {
+          const index = life.papers.findIndex(item => item.id === req.params.id);
+          if (index < 0) fail('未找到记录', 404, 'NOT_FOUND');
+          ({ record: updated, entry } = appendSession(life.papers[index], req.body, now));
+          const papers = [...life.papers]; papers[index] = updated; return { ...life, papers };
+        });
+        broadcast('data_changed', { dataset: 'papers', paper: updated, state: store.state() });
+        return res.status(201).json({ success: true, paper: updated, session: entry });
+      }));
+    }
+  }
+
+  app.get('/api/settings', requireAuth, routeError((req, res) => res.json({ success: true, settings: store.read('life').settings })));
+  app.patch('/api/settings', requireAuth, routeError((req, res) => {
+    let settings;
+    const now = Date.now();
+    store.mutate('life', life => {
+      settings = updateSettings(life.settings, req.body, now);
+      return { ...life, settings };
+    });
+    broadcast('data_changed', { dataset: 'settings', settings, state: store.state() });
+    res.json({ success: true, settings });
+  }));
+
+  app.get('/api/export', requireAuth, routeError((req, res) => {
+    const output = buildExport(store.state(), req.query);
+    res.setHeader('Content-Type', output.contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${output.filename}"`);
+    res.send(output.body);
+  }));
+
+  app.get('/api/bike', requireAuth, routeError((req, res) => res.json({ success: true, bike: store.read('bike') })));
+  app.post('/api/bike', requireAuth, routeError((req, res) => {
+    const now = Date.now(); let bike;
+    store.mutate('bike', current => {
+      bike = parkBike(current, req.body, now);
+      return bike;
+    });
+    broadcast('bike_updated', { bike }); broadcast('data_changed', { dataset: 'bike', bike, state: store.state() });
+    res.json({ success: true, bike });
+  }));
+  app.post('/api/bike/clear', requireAuth, routeError((req, res) => {
+    const now = Date.now(); let bike;
+    store.mutate('bike', current => {
+      bike = clearBike(current, now);
+      return bike;
+    });
+    broadcast('bike_updated', { bike }); broadcast('data_changed', { dataset: 'bike', bike, state: store.state() });
+    res.json({ success: true, bike });
+  }));
+
+  app.use((error, req, res, next) => jsonError(res, error));
+  app.use((req, res) => res.status(404).json({ error: '未找到请求资源' }));
+
+  const api = {
+    app, store, clients, port, host,
+    async listen() { return new Promise((resolve, reject) => {
+      const server = app.listen(port, host, () => resolve(server));
+      server.once('error', reject);
+    }); },
+    close() { closed = true; clients.forEach(client => { try { client.end(); } catch {} }); clients.clear(); store.close(); }
+  };
+  return api;
 }
 
-// SSE endpoint
-app.get('/api/events', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
-
-  res.write(`event: connected\ndata: ${JSON.stringify({ time: new Date().toISOString() })}\n\n`);
-  sseClients.add(res);
-
-  const pingInterval = setInterval(() => {
-    res.write(': ping\n\n');
-  }, 25000);
-
-  req.on('close', () => {
-    clearInterval(pingInterval);
-    sseClients.delete(res);
-  });
-});
-
-// API: List todos
-app.get('/api/todos', (req, res) => {
-  const todos = readTodos();
-  res.json({ success: true, todos });
-});
-
-// API: Add todo
-app.post('/api/todos', requireAuth, (req, res) => {
-  const { title, date, time, priority, category, notes, content, links, images } = req.body;
-  if (!title || !title.trim()) {
-    return res.status(400).json({ error: '标题不能为空' });
-  }
-
-  const todos = readTodos();
-  const now = new Date();
-  const newTodo = {
-    id: `todo-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    title: title.trim(),
-    date: date || now.toISOString().split('T')[0],
-    time: time || '',
-    priority: priority || 'medium',
-    category: category || '工作',
-    notes: (notes || '').trim(),
-    content: (content || notes || '').trim(),
-    links: Array.isArray(links) ? links : [],
-    images: Array.isArray(images) ? images : [],
-    completed: false,
-    completedAt: null,
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
-    source: req.body.source || 'phone'
-  };
-
-  todos.unshift(newTodo);
-  writeTodos(todos);
-
-  broadcastEvent('todo_added', { todo: newTodo, todos });
-  res.status(201).json({ success: true, todo: newTodo });
-});
-
-// API: Update todo
-app.patch('/api/todos/:id', requireAuth, (req, res) => {
-  const { id } = req.params;
-  const updates = req.body;
-  const todos = readTodos();
-  const index = todos.findIndex((t) => t.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ error: '未找到待办事项' });
-  }
-
-  const existing = todos[index];
-  const now = new Date().toISOString();
-
-  if (typeof updates.completed === 'boolean') {
-    existing.completed = updates.completed;
-    existing.completedAt = updates.completed ? now : null;
-  }
-
-  if (updates.title !== undefined) existing.title = updates.title.trim();
-  if (updates.date !== undefined) existing.date = updates.date;
-  if (updates.time !== undefined) existing.time = updates.time;
-  if (updates.priority !== undefined) existing.priority = updates.priority;
-  if (updates.category !== undefined) existing.category = updates.category;
-  if (updates.notes !== undefined) existing.notes = updates.notes;
-  if (updates.content !== undefined) existing.content = updates.content;
-  if (updates.links !== undefined) existing.links = updates.links;
-  if (updates.images !== undefined) existing.images = updates.images;
-  existing.updatedAt = now;
-
-  writeTodos(todos);
-  broadcastEvent('todo_updated', { todo: existing, todos });
-  res.json({ success: true, todo: existing });
-});
-
-// API: Delete todo
-app.delete('/api/todos/:id', requireAuth, (req, res) => {
-  const { id } = req.params;
-  const todos = readTodos();
-  const index = todos.findIndex((t) => t.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ error: '未找到待办事项' });
-  }
-
-  const [removed] = todos.splice(index, 1);
-  writeTodos(todos);
-
-  broadcastEvent('todo_deleted', { id, removed, todos });
-  res.json({ success: true, removed });
-});
-
-// ==========================================================================
-// Bike Locator API (我的单车去哪了)
-// ==========================================================================
-app.get('/api/bike', (req, res) => {
-  const bike = readBike();
-  res.json({ success: true, bike });
-});
-
-app.post('/api/bike', (req, res) => {
-  const { latitude, longitude, accuracy, note, photo } = req.body;
-  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
-    return res.status(400).json({ error: '经纬度坐标不能为空' });
-  }
-
-  const bike = {
-    active: true,
-    latitude,
-    longitude,
-    accuracy: accuracy || null,
-    timestamp: new Date().toISOString(),
-    note: (note || '').trim(),
-    photo: photo || null
-  };
-
-  writeBike(bike);
-  broadcastEvent('bike_updated', { bike });
-  res.json({ success: true, bike });
-});
-
-app.post('/api/bike/clear', (req, res) => {
-  const prev = readBike();
-  const bike = {
-    active: false,
-    latitude: prev.latitude || null,
-    longitude: prev.longitude || null,
-    retrievedAt: new Date().toISOString()
-  };
-
-  writeBike(bike);
-  broadcastEvent('bike_updated', { bike });
-  res.json({ success: true, bike });
-});
-
-// API: Network and QR code info
-app.get('/api/network', async (req, res) => {
+export async function startServer(options = {}) {
+  const api = createApp(options);
+  const server = await api.listen();
+  const port = server.address()?.port ?? options.port ?? process.env.PORT ?? 3000;
   const ips = getLocalIpAddresses();
-  const host = req.get('host') || `${ips[0] || 'localhost'}:${PORT}`;
-  const protocol = req.protocol || 'http';
-  const url = `${protocol}://${host}`;
-  let qrDataUrl = '';
+  console.log(`待办日历看板服务已启动: http://${ips[0] || 'localhost'}:${port}`);
+  if (options.apiKey ?? process.env.API_KEY) console.log('API 鉴权已开启');
+  return { ...api, server, close() { api.close(); return new Promise(resolve => server.close(() => resolve())); } };
+}
 
-  try {
-    qrDataUrl = await QRCode.toDataURL(url, { margin: 1, width: 256 });
-  } catch (err) {
-    console.error('QR code generation failed:', err);
-  }
-
-  res.json({
-    ips,
-    port: PORT,
-    primaryUrl: url,
-    qrDataUrl,
-    activeConnections: sseClients.size
-  });
-});
-
-const server = app.listen(PORT, '0.0.0.0', async () => {
-  const ips = getLocalIpAddresses();
-  const primaryIp = ips[0] || 'localhost';
-  const mobileUrl = `http://${primaryIp}:${PORT}`;
-
-  console.log('='.repeat(55));
-  console.log(`🚀 待办日历看板服务已启动！`);
-  console.log(`💻 本地访问: http://localhost:${PORT}`);
-  console.log(`📱 局域网访问: ${mobileUrl}`);
-  console.log(`⚡ 监听端口: ${PORT}`);
-  if (API_KEY) console.log(`🔒 API 鉴权已开启`);
-  console.log('='.repeat(55));
-
-  try {
-    const terminalQR = await QRCode.toString(mobileUrl, { type: 'terminal', small: true });
-    console.log('\n📲 扫码访问：');
-    console.log(terminalQR);
-  } catch {
-    // ignore
-  }
-});
-
-process.on('SIGINT', () => {
-  server.close(() => process.exit(0));
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  startServer().catch(error => { console.error(error.message); process.exitCode = 1; });
+}
