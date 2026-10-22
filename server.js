@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 // Allow configurable data path for cloud container volumes
 const DATA_DIR = process.env.DATA_PATH || path.join(__dirname, 'data');
 const DATA_FILE = path.extname(DATA_DIR) ? DATA_DIR : path.join(DATA_DIR, 'todos.json');
+const BIKE_FILE = path.join(path.dirname(DATA_FILE), 'bike.json');
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY || ''; // Optional secret token
 
@@ -19,12 +20,35 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Ensure data directory and file exist
+// Ensure data directory and files exist
 if (!fs.existsSync(path.dirname(DATA_FILE))) {
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
 }
 if (!fs.existsSync(DATA_FILE)) {
   fs.writeFileSync(DATA_FILE, '[]', 'utf-8');
+}
+if (!fs.existsSync(BIKE_FILE)) {
+  fs.writeFileSync(BIKE_FILE, '{"active":false}', 'utf-8');
+}
+
+function readBike() {
+  try {
+    if (!fs.existsSync(BIKE_FILE)) return { active: false };
+    return JSON.parse(fs.readFileSync(BIKE_FILE, 'utf-8') || '{"active":false}');
+  } catch (err) {
+    console.error('读取单车位置失败:', err);
+    return { active: false };
+  }
+}
+
+function writeBike(data) {
+  try {
+    fs.writeFileSync(BIKE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    return true;
+  } catch (err) {
+    console.error('写入单车位置失败:', err);
+    return false;
+  }
 }
 
 // In-memory SSE clients
@@ -223,6 +247,49 @@ app.delete('/api/todos/:id', requireAuth, (req, res) => {
 
   broadcastEvent('todo_deleted', { id, removed, todos });
   res.json({ success: true, removed });
+});
+
+// ==========================================================================
+// Bike Locator API (我的单车去哪了)
+// ==========================================================================
+app.get('/api/bike', (req, res) => {
+  const bike = readBike();
+  res.json({ success: true, bike });
+});
+
+app.post('/api/bike', (req, res) => {
+  const { latitude, longitude, accuracy, note, photo } = req.body;
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return res.status(400).json({ error: '经纬度坐标不能为空' });
+  }
+
+  const bike = {
+    active: true,
+    latitude,
+    longitude,
+    accuracy: accuracy || null,
+    timestamp: new Date().toISOString(),
+    note: (note || '').trim(),
+    photo: photo || null
+  };
+
+  writeBike(bike);
+  broadcastEvent('bike_updated', { bike });
+  res.json({ success: true, bike });
+});
+
+app.post('/api/bike/clear', (req, res) => {
+  const prev = readBike();
+  const bike = {
+    active: false,
+    latitude: prev.latitude || null,
+    longitude: prev.longitude || null,
+    retrievedAt: new Date().toISOString()
+  };
+
+  writeBike(bike);
+  broadcastEvent('bike_updated', { bike });
+  res.json({ success: true, bike });
 });
 
 // API: Network and QR code info

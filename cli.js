@@ -394,6 +394,46 @@ async function main() {
       break;
     }
 
+    case 'bike': {
+      const sub = args[1];
+      const bikeFile = path.join(__dirname, 'data', 'bike.json');
+      if (sub === 'clear' || sub === 'finish') {
+        if (isRemote) {
+          await remoteFetch('/api/bike/clear', 'POST');
+        } else {
+          fs.writeFileSync(bikeFile, JSON.stringify({ active: false, retrievedAt: new Date().toISOString() }, null, 2), 'utf-8');
+        }
+        console.log('\n🎉 [Agent] 已确认取车，单车停放记录已归档核销！\n');
+        return;
+      }
+
+      let bike = { active: false };
+      if (isRemote) {
+        const res = await remoteFetch('/api/bike');
+        bike = res.bike || { active: false };
+      } else {
+        if (fs.existsSync(bikeFile)) {
+          bike = JSON.parse(fs.readFileSync(bikeFile, 'utf-8') || '{"active":false}');
+        }
+      }
+
+      console.log('\n' + '='.repeat(48));
+      console.log('🚲 【我的单车去哪了】状态看板');
+      if (bike.active) {
+        console.log('🟢 状态: 单车停放中 (未取车)');
+        console.log(`⏰ 停放时间: ${bike.timestamp}`);
+        console.log(`📍 坐标: [纬度 ${bike.latitude}, 经度 ${bike.longitude}] (精度 ±${Math.round(bike.accuracy || 0)}m)`);
+        if (bike.note) console.log(`📝 位置特征: ${bike.note}`);
+        if (bike.photo) console.log('📸 包含停车现场照片附件');
+        console.log(`🧭 高德导航: https://uri.amap.com/marker?position=${bike.longitude},${bike.latitude}&name=我的单车`);
+      } else {
+        console.log('⚪ 状态: 单车当前未停放或已取走');
+        if (bike.retrievedAt) console.log(`上次取车时间: ${bike.retrievedAt}`);
+      }
+      console.log('='.repeat(48) + '\n');
+      break;
+    }
+
     default:
       console.log(`
 待办事项 Agent 终端管理工具:

@@ -4,12 +4,15 @@
 
 const state = {
   todos: [],
+  bike: { active: false },
   selectedDate: getFormattedDate(new Date()),
   weekOffset: 0,
   activeFilter: 'current-date', // 'current-date' | 'all-pending' | 'upcoming' | 'completed'
   theme: localStorage.getItem('todo_theme') || 'auto',
   activeDetailTodo: null,
   pendingFormImages: [],
+  pendingBikePhoto: null,
+  tempGpsCoords: null,
   networkInfo: null
 };
 
@@ -180,10 +183,12 @@ function setupDialogFallback(dialog) {
     });
   }
 }
+const bikeRecordDialog = document.getElementById('bikeRecordDialog');
 setupDialogFallback(detailDialog);
 setupDialogFallback(todoDialog);
 setupDialogFallback(qrDialog);
 setupDialogFallback(imagePreviewDialog);
+if (bikeRecordDialog) setupDialogFallback(bikeRecordDialog);
 
 // ==========================================================================
 // Toast Notification
@@ -954,6 +959,12 @@ function setupSSE() {
     renderCalendarStrip();
   });
 
+  evtSource.addEventListener('bike_updated', (e) => {
+    const data = JSON.parse(e.data);
+    state.bike = data.bike;
+    renderBikeWidget();
+  });
+
   evtSource.onerror = () => {
     syncStatusEl.querySelector('.status-dot').className = 'status-dot offline';
     syncStatusEl.querySelector('.status-label').textContent = '连接中断，重试中...';
@@ -976,8 +987,287 @@ async function fetchTodos() {
   }
 }
 
+// ==========================================================================
+// Bike Locator Logic (我的单车去哪了)
+// ==========================================================================
+const headerBikeBtn = document.getElementById('headerBikeBtn');
+const bikeHeaderBadge = document.getElementById('bikeHeaderBadge');
+const bikeInactiveView = document.getElementById('bikeInactiveView');
+const bikeActiveView = document.getElementById('bikeActiveView');
+const triggerParkBtn = document.getElementById('triggerParkBtn');
+const bikeFinishBtn = document.getElementById('bikeFinishBtn');
+const bikeTimeBadge = document.getElementById('bikeTimeBadge');
+const bikeParkTimeText = document.getElementById('bikeParkTimeText');
+const bikeNoteRow = document.getElementById('bikeNoteRow');
+const bikeNoteText = document.getElementById('bikeNoteText');
+const bikeAccuracyText = document.getElementById('bikeAccuracyText');
+const bikeNavBtn = document.getElementById('bikeNavBtn');
+const bikePhotoBtn = document.getElementById('bikePhotoBtn');
+
+const closeBikeDialogBtn = document.getElementById('closeBikeDialogBtn');
+const cancelBikeDialogBtn = document.getElementById('cancelBikeDialogBtn');
+const bikeRecordForm = document.getElementById('bikeRecordForm');
+const gpsSpinner = document.getElementById('gpsSpinner');
+const gpsStateTitle = document.getElementById('gpsStateTitle');
+const gpsStateSub = document.getElementById('gpsStateSub');
+const bikeNoteInput = document.getElementById('bikeNoteInput');
+const bikeQuickChips = document.getElementById('bikeQuickChips');
+const bikePhotoInput = document.getElementById('bikePhotoInput');
+const bikePhotoPreviewWrap = document.getElementById('bikePhotoPreviewWrap');
+const bikePhotoImg = document.getElementById('bikePhotoImg');
+const removeBikePhotoBtn = document.getElementById('removeBikePhotoBtn');
+const saveBikeLocationBtn = document.getElementById('saveBikeLocationBtn');
+
+function formatDurationSince(isoStr) {
+  if (!isoStr) return '刚刚';
+  const diffMs = Date.now() - new Date(isoStr).getTime();
+  if (diffMs < 60000) return '刚刚';
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 60) return `已停 ${mins} 分钟`;
+  const hours = Math.floor(mins / 60);
+  const remainMins = mins % 60;
+  return `已停 ${hours} 小时 ${remainMins} 分`;
+}
+
+function renderBikeWidget() {
+  const bike = state.bike;
+  if (bike && bike.active) {
+    bikeInactiveView.style.display = 'none';
+    bikeActiveView.style.display = 'flex';
+    bikeHeaderBadge.style.display = 'block';
+
+    bikeTimeBadge.textContent = formatDurationSince(bike.timestamp);
+    bikeParkTimeText.textContent = formatDisplayDateTime(bike.timestamp);
+    
+    if (bike.note) {
+      bikeNoteRow.style.display = 'flex';
+      bikeNoteText.textContent = bike.note;
+    } else {
+      bikeNoteRow.style.display = 'none';
+    }
+
+    const acc = bike.accuracy ? `GPS 精度 ±${Math.round(bike.accuracy)}m` : '高精度 GPS 已记录';
+    bikeAccuracyText.textContent = acc;
+
+    // Smart multi-map navigation URL
+    // On iOS Apple Maps / Amap:
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    if (isIOS) {
+      bikeNavBtn.href = `http://maps.apple.com/?daddr=${bike.latitude},${bike.longitude}&q=我的单车停放点`;
+    } else {
+      bikeNavBtn.href = `https://uri.amap.com/marker?position=${bike.longitude},${bike.latitude}&name=我的单车停放点&src=mobile-todo`;
+    }
+
+    if (bike.photo) {
+      bikePhotoBtn.style.display = 'inline-flex';
+      bikePhotoBtn.onclick = () => openImageLightbox(bike.photo);
+    } else {
+      bikePhotoBtn.style.display = 'none';
+    }
+  } else {
+    bikeInactiveView.style.display = 'flex';
+    bikeActiveView.style.display = 'none';
+    bikeHeaderBadge.style.display = 'none';
+  }
+}
+
+function openBikeRecordDialog() {
+  state.tempGpsCoords = null;
+  state.pendingBikePhoto = null;
+  bikeNoteInput.value = '';
+  bikePhotoPreviewWrap.style.display = 'none';
+  saveBikeLocationBtn.disabled = true;
+  saveBikeLocationBtn.textContent = '📡 正在定位中，请稍候...';
+
+  gpsSpinner.textContent = '📡';
+  gpsSpinner.style.animation = 'pulse 1s infinite';
+  gpsStateTitle.textContent = '正在获取高精度 GPS 定位...';
+  gpsStateSub.textContent = '请在弹出的系统提示中允许位置访问';
+
+  bikeRecordDialog.showModal();
+
+  if (!navigator.geolocation) {
+    gpsSpinner.textContent = '⚠️';
+    gpsStateTitle.textContent = '当前设备不支持浏览器定位';
+    gpsStateSub.textContent = '您可以手动输入停车特征备注';
+    saveBikeLocationBtn.disabled = false;
+    saveBikeLocationBtn.textContent = '📍 仅保存停车备注';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      state.tempGpsCoords = {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
+      };
+      gpsSpinner.textContent = '✅';
+      gpsSpinner.style.animation = 'none';
+      gpsStateTitle.textContent = '定位锁定成功！';
+      gpsStateSub.textContent = `经纬度: [${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}] · 精度 ±${Math.round(pos.coords.accuracy)}米`;
+      saveBikeLocationBtn.disabled = false;
+      saveBikeLocationBtn.textContent = '📍 确认记录当前停车点';
+    },
+    (err) => {
+      console.warn('Geolocation error:', err);
+      gpsSpinner.textContent = '⚠️';
+      gpsStateTitle.textContent = '未能获取精确 GPS 定位';
+      gpsStateSub.textContent = err.message || '请确保手机已开启定位权限并允许浏览器访问';
+      saveBikeLocationBtn.disabled = false;
+      saveBikeLocationBtn.textContent = '📍 仅保存位置备注与照片';
+    },
+    {
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 0
+    }
+  );
+}
+
+// Quick chips event
+if (bikeQuickChips) {
+  bikeQuickChips.querySelectorAll('.chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      bikeNoteInput.value = chip.dataset.text;
+    });
+  });
+}
+
+// Bike photo capture
+if (bikePhotoInput) {
+  bikePhotoInput.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDimension = 1000;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        state.pendingBikePhoto = dataUrl;
+        bikePhotoImg.src = dataUrl;
+        bikePhotoPreviewWrap.style.display = 'block';
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+    bikePhotoInput.value = '';
+  });
+}
+
+if (removeBikePhotoBtn) {
+  removeBikePhotoBtn.addEventListener('click', () => {
+    state.pendingBikePhoto = null;
+    bikePhotoPreviewWrap.style.display = 'none';
+  });
+}
+
+// Submit bike record form
+if (bikeRecordForm) {
+  bikeRecordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    bikeRecordDialog.close();
+
+    const note = bikeNoteInput.value.trim();
+    const photo = state.pendingBikePhoto;
+    const coords = state.tempGpsCoords || { latitude: 0, longitude: 0, accuracy: null };
+
+    const payload = {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      accuracy: coords.accuracy,
+      note,
+      photo
+    };
+
+    // Optimistic UI update
+    state.bike = { active: true, ...payload, timestamp: new Date().toISOString() };
+    renderBikeWidget();
+    sfx.playSuccess();
+    showToast('🚲 单车位置已记录！下课一键导航找车', '📍');
+
+    try {
+      const res = await fetch('/api/bike', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('网络保存失败');
+      const data = await res.json();
+      state.bike = data.bike;
+      renderBikeWidget();
+    } catch (err) {
+      console.error('保存单车位置失败:', err);
+      showToast('云端保存失败，已在本地暂存', '⚠️');
+    }
+  });
+}
+
+// Finish / retrieve bike
+async function finishBikeParking() {
+  if (!confirm('确认已经找到单车，完成本次停车记录？')) return;
+
+  state.bike = { active: false };
+  renderBikeWidget();
+  sfx.playSuccess();
+  showToast('🎉 已找到单车，停车记录已归档！', '🚲');
+
+  try {
+    await fetch('/api/bike/clear', { method: 'POST' });
+  } catch (err) {
+    console.error('归档单车记录失败:', err);
+  }
+}
+
+if (triggerParkBtn) triggerParkBtn.addEventListener('click', openBikeRecordDialog);
+if (headerBikeBtn) {
+  headerBikeBtn.addEventListener('click', () => {
+    if (state.bike && state.bike.active) {
+      // If already active, scroll to widget or prompt
+      document.getElementById('bikeWidgetCard')?.scrollIntoView({ behavior: 'smooth' });
+      showToast('🚲 正在查看当前单车停放位置', '📍');
+    } else {
+      openBikeRecordDialog();
+    }
+  });
+}
+if (bikeFinishBtn) bikeFinishBtn.addEventListener('click', finishBikeParking);
+if (closeBikeDialogBtn) closeBikeDialogBtn.addEventListener('click', () => bikeRecordDialog.close());
+if (cancelBikeDialogBtn) cancelBikeDialogBtn.addEventListener('click', () => bikeRecordDialog.close());
+
+async function fetchBike() {
+  try {
+    const res = await fetch('/api/bike');
+    const data = await res.json();
+    if (data.success && data.bike) {
+      state.bike = data.bike;
+      renderBikeWidget();
+    }
+  } catch (err) {
+    console.error('获取单车信息失败:', err);
+  }
+}
+
 // App Initialization
 fetchTodos();
+fetchBike();
 setupSSE();
 renderCalendarStrip();
 updateHeaderDateDisplay();
