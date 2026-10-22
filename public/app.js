@@ -288,6 +288,8 @@ function locateBike() {
 function toggleTheme() {
   const next=document.documentElement.dataset.theme==='dark'?'light':'dark';
   document.documentElement.dataset.theme=next;localStorage.setItem('todo_theme',next);
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.content = next === 'dark' ? '#111114' : '#f5f5f7';
   document.querySelector('#themeButton').innerHTML=icon(next==='dark'?'sun':'moon');
   document.querySelector('#themeButton').setAttribute('aria-label',next==='dark'?'切换浅色模式':'切换深色模式');
 }
@@ -351,8 +353,11 @@ setInterval(()=>{
   if(clockDay!==localDate()){if(state.selectedDate===clockDay)state.selectedDate=localDate();clockDay=localDate();render();}
 },1000);
 const savedTheme=localStorage.getItem('todo_theme');
-document.documentElement.dataset.theme=['dark','light'].includes(savedTheme)?savedTheme:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-document.querySelector('#themeButton').innerHTML=icon(document.documentElement.dataset.theme==='dark'?'sun':'moon');
+const activeTheme=['dark','light'].includes(savedTheme)?savedTheme:matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+document.documentElement.dataset.theme=activeTheme;
+const initMetaTheme = document.querySelector('meta[name="theme-color"]');
+if (initMetaTheme) initMetaTheme.content = activeTheme === 'dark' ? '#111114' : '#f5f5f7';
+document.querySelector('#themeButton').innerHTML=icon(activeTheme==='dark'?'sun':'moon');
 document.querySelector('#networkButton').innerHTML=icon('phone');
 renderNavigation();
 refresh().then(()=>{if(state.loaded)connectEvents();});
